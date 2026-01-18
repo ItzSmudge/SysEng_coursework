@@ -30,7 +30,7 @@ class PIDController(Controller):
     def get_action(self, state, target_pos=0.0):
         x, x_dot, theta, theta_dot = state
         
-        error_x = target_pos - x
+        error_x = target_pos - x 
         self.integral_x += error_x 
         derivative_x = 0 - x_dot  #d/dt(target - x) = 0 - velocity
 
