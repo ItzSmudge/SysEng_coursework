@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import numpy as np
 
 class Controller(ABC):
     @abstractmethod
@@ -27,7 +28,22 @@ class PIDController(Controller):
         self.prev_error_x = 0.0
     
     def get_action(self, state, target_pos=0.0):
-        pass
+        x, x_dot, theta, theta_dot = state
+        
+        error_x = target_pos - x
+        self.integral_x += error_x 
+        derivative_x = 0 - x_dot  #d/dt(target - x) = 0 - velocity
+
+        desired_theta = (self.kp_x * error_x) + (self.ki_x * self.integral_x) + (self.kd_x * derivative_x)
+
+        error_theta = desired_theta - theta
+        self.integral_theta += error_theta
+        desired_theta = 0 - theta_dot 
+
+        force_out = (self.kp_theta*error_theta) + (self.ki_theta*self.integral_theta) + (self.kd_theta*desired_theta)
+
+        return force_out 
+
 
     def reset(self):
         self.integral_theta = 0.0 
