@@ -30,7 +30,19 @@ class PIDController(Controller):
         pass
 
     def reset(self):
-        pass
+        self.integral_theta = 0.0 
+        self.integral_x = 0.0
+        self.prev_error_theta = 0.0 
+        self.prev_error_x = 0.0
+
+    def set_kvalues(self, kp_theta, kd_theta, ki_theta, kp_x, kd_x, ki_x):
+        self.kp_theta = kp_theta
+        self.ki_theta = ki_theta
+        self.kd_theta = kd_theta
+
+        self.kp_x = kp_x
+        self.ki_x = ki_x
+        self.kd_x = kd_x
 
 class LQRController(Controller):
 
