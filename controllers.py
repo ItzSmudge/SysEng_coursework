@@ -38,11 +38,11 @@ class PIDController(Controller):
 
         error_theta = desired_theta - theta
         self.integral_theta += error_theta
-        desired_theta = 0 - theta_dot 
+        derivative_theta = 0 - theta_dot 
 
-        force_out = (self.kp_theta*error_theta) + (self.ki_theta*self.integral_theta) + (self.kd_theta*desired_theta)
+        force_out = (self.kp_theta*error_theta) + (self.ki_theta*self.integral_theta) + (self.kd_theta*derivative_theta)
 
-        return force_out 
+        return force_out
 
 
     def reset(self):
