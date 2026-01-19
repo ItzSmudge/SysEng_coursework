@@ -37,10 +37,13 @@ class PIDController(Controller):
         desired_theta = (self.kp_x * error_x) + (self.ki_x * self.integral_x) + (self.kd_x * derivative_x)
 
         error_theta = desired_theta - theta
-        self.integral_theta += error_theta * 0.001  # Assuming dt=0.001 for integral calculation
+        self.integral_theta += error_theta 
         derivative_theta = 0 - theta_dot 
 
-        force_out = (self.kp_theta*error_theta) + (self.ki_theta*self.integral_theta) + (self.kd_theta*derivative_theta)
+        theta_force = (self.kp_theta * error_theta) + (self.ki_theta * self.integral_theta) + (self.kd_theta * derivative_theta)
+        x_force = (self.kp_x * error_x) + (self.ki_x * self.integral_x) + (self.kd_x * derivative_x)
+
+        force_out = theta_force + x_force
 
         return force_out
 
