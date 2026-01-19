@@ -39,6 +39,7 @@ def visualize_trajectory(pendulum, trajectory, save_gif=False):
     """
     
     # Extract data
+    trajectory, disturbance_log = trajectory
     x = trajectory[:, 0]
     x_dot = trajectory[:, 1]
     theta = trajectory[:, 2]
@@ -50,8 +51,8 @@ def visualize_trajectory(pendulum, trajectory, save_gif=False):
     
     # Animation subplot
     ax_anim = plt.subplot(2, 2, 1)
-    ax_anim.set_xlim(-2, 2)
-    ax_anim.set_ylim(-1.5, 1.5)
+    ax_anim.set_xlim(-3, 3)
+    ax_anim.set_ylim(-1, 4)
     ax_anim.set_aspect('equal')
     ax_anim.grid(True, alpha=0.3)
     ax_anim.set_title('Pendulum Animation')
@@ -68,6 +69,10 @@ def visualize_trajectory(pendulum, trajectory, save_gif=False):
     trace, = ax_anim.plot([], [], 'g-', alpha=0.3, lw=1)
     time_text = ax_anim.text(0.02, 0.95, '', transform=ax_anim.transAxes)
     
+
+    # Disturbance arrow (as a simple line for easy updating)
+    disturbance_line, = ax_anim.plot([], [], color='purple', lw=4, alpha=0.0)
+
     # Position plot
     ax_pos = plt.subplot(2, 2, 2)
     ax_pos.plot(time, x, 'b-', label='Cart Position')
@@ -101,32 +106,72 @@ def visualize_trajectory(pendulum, trajectory, save_gif=False):
     
     # Animation update function
     trace_x, trace_y = [], []
+
+    # Keep last N disturbance values for fade-out behavior
+    ARROW_DECAY_FRAMES = 5000   # stays visible for ~50 frames (~0.05 sec at dt=0.001)
+    disturbance_memory = np.zeros(ARROW_DECAY_FRAMES)
+
     
     def init():
         cart.set_xy((x[0] - cart_width/2, -cart_height/2))
         pendulum_line.set_data([], [])
         trace.set_data([], [])
         time_text.set_text('')
-        return cart, pendulum_line, trace, time_text
-    
+        disturbance_line.set_data([], [])
+        disturbance_line.set_alpha(0.0)
+        return cart, pendulum_line, trace, time_text, disturbance_line
+
     def animate(i):
-        # Update cart position
+    # Update cart position
         cart.set_xy((x[i] - cart_width/2, -cart_height/2))
-        
+
         # Update pendulum
         pend_x = x[i] + pendulum.l * np.sin(theta[i])
         pend_y = pendulum.l * np.cos(theta[i])
         pendulum_line.set_data([x[i], pend_x], [0, pend_y])
-        
+
         # Update trace
         trace_x.append(pend_x)
         trace_y.append(pend_y)
         trace.set_data(trace_x, trace_y)
-        
+
         # Update time
         time_text.set_text(f'Time = {time[i]:.2f}s')
-        
-        return cart, pendulum_line, trace, time_text
+
+        # Shift disturbance memory
+        disturbance_memory[:-1] = disturbance_memory[1:]
+        disturbance_memory[-1] = disturbance_log[i]   # new disturbance enters buffer
+
+        # Compute “effective disturbance” as the maximum absolute recent force
+        Fd_eff = disturbance_memory.max() if abs(disturbance_memory).max() > 1e-6 else 0.0
+        sign_eff = np.sign(disturbance_memory[np.argmax(np.abs(disturbance_memory))]) if Fd_eff != 0 else 0
+        Fd_eff *= sign_eff  # restore sign
+
+
+        if abs(Fd_eff) > 1e-6:
+            arrow_length = 0.5 * np.tanh(abs(Fd_eff) / 30)
+            direction = np.sign(Fd_eff)
+
+            x0 = x[i]
+            y0 = 0.4
+            x1 = x0 + direction * arrow_length
+            y1 = y0
+
+            disturbance_line.set_data([x0, x1], [y0, y1])
+
+            # Fade out based on how old the max disturbance is
+            age = ARROW_DECAY_FRAMES - np.argmax(disturbance_memory[::-1])
+            alpha = age / ARROW_DECAY_FRAMES
+            disturbance_line.set_alpha(alpha)
+        else:
+            disturbance_line.set_alpha(0.0)
+
+            disturbance_line.set_alpha(0.0)
+
+        disturbance_line.set_data([], [])
+        disturbance_line.set_alpha(0.0)
+        return cart, pendulum_line, trace, time_text, disturbance_line
+
     
     # Create animation
     anim = animation.FuncAnimation(fig, animate, init_func=init,
@@ -186,7 +231,7 @@ def plot_results(pendulum, trajectory):
 # Example usage:
 if __name__ == "__main__":
     # Create pendulum
-    pend = Pendulum(M=0.5, m=0.2, l=0.8, b=0.1, dt=0.001)
+    pend = Pendulum(M=0.5, m=0.2, l=0.8, b=0.1, dt=0.001, mode="1", disturbance_level=2)
     
     # Create a simple controller (example: constant force or proportional control)
     class SimpleController:
@@ -195,7 +240,7 @@ if __name__ == "__main__":
             Kp = 10
             return 0
     
-    controller = PIDController(kp_theta=50.0, kd_theta=1, ki_theta=0,
+    controller = PIDController(kp_theta=75.0, kd_theta=2, ki_theta=0,
                                kp_x=0, kd_x=0, ki_x=0)
     # controller = SimpleController()
     
@@ -203,7 +248,7 @@ if __name__ == "__main__":
     initial_state = np.array([0.0, 0.0, 0.2, 0.0])  # Start with small angle
     
     # Simulate
-    trajectory = pend.simulate(initial_state, controller, steps=50000, target_pos=0.0)
+    trajectory = pend.simulate(initial_state, controller, steps=10000, target_pos=0.0)
     
     # Visualize
     # Option 1: Animated

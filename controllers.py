@@ -10,7 +10,6 @@ class Controller(ABC):
     def reset(self):
         pass
 
-#test commit
 class PIDController(Controller):
 
     def __init__(self, kp_theta=0.0, kd_theta=0.0, ki_theta=0.0, kp_x=0.0, kd_x=0.0, ki_x=0.0, dt=0.001):
@@ -22,7 +21,7 @@ class PIDController(Controller):
         self.ki_x = ki_x
         self.kd_x = kd_x
 
-        self.dt = dt
+        self.dt = dt 
 
         self.integral_theta = 0.0 
         self.integral_x = 0.0 
@@ -33,16 +32,19 @@ class PIDController(Controller):
         x, x_dot, theta, theta_dot = state
         
         error_x = target_pos[0] - x 
-        self.integral_x += error_x * self.dt # Assuming dt=0.001 for integral calculation
+        self.integral_x += error_x * self.dt  # Assuming dt=0.001 for integral calculation
         derivative_x = 0 - x_dot  #d/dt(target - x) = 0 - velocity
 
         desired_theta = (self.kp_x * error_x) + (self.ki_x * self.integral_x) + (self.kd_x * derivative_x)
 
         error_theta = desired_theta - theta
-        self.integral_theta += error_theta * self.dt # Assuming dt=0.001 for integral calculation
+        self.integral_theta += error_theta * self.dt
         derivative_theta = 0 - theta_dot 
 
-        force_out = (self.kp_theta*error_theta) + (self.ki_theta*self.integral_theta) + (self.kd_theta*derivative_theta)
+        theta_force = (self.kp_theta * error_theta) + (self.ki_theta * self.integral_theta) + (self.kd_theta * derivative_theta)
+        x_force = (self.kp_x * error_x) + (self.ki_x * self.integral_x) + (self.kd_x * derivative_x)
+
+        force_out = theta_force + x_force
 
         return force_out
 
