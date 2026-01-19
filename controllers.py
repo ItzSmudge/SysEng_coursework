@@ -13,7 +13,7 @@ class Controller(ABC):
 #test commit
 class PIDController(Controller):
 
-    def __init__(self, kp_theta=0.0, kd_theta=0.0, ki_theta=0.0, kp_x=0.0, kd_x=0.0, ki_x=0.0, dt=0.01):
+    def __init__(self, kp_theta=0.0, kd_theta=0.0, ki_theta=0.0, kp_x=0.0, kd_x=0.0, ki_x=0.0, dt=0.001):
         self.kp_theta = kp_theta
         self.ki_theta = ki_theta
         self.kd_theta = kd_theta
