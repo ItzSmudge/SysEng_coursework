@@ -13,7 +13,7 @@ class Controller(ABC):
 #test commit
 class PIDController(Controller):
 
-    def __init__(self, kp_theta=0.0, kd_theta=0.0, ki_theta=0.0, kp_x=0.0, kd_x=0.0, ki_x=0.0):
+    def __init__(self, kp_theta=0.0, kd_theta=0.0, ki_theta=0.0, kp_x=0.0, kd_x=0.0, ki_x=0.0, dt=0.01):
         self.kp_theta = kp_theta
         self.ki_theta = ki_theta
         self.kd_theta = kd_theta
@@ -22,16 +22,18 @@ class PIDController(Controller):
         self.ki_x = ki_x
         self.kd_x = kd_x
 
+        self.dt = dt
+
         self.integral_theta = 0.0 
         self.integral_x = 0.0 
         self.prev_error_theta = 0.0 
         self.prev_error_x = 0.0
     
-    def get_action(self, state, target_pos=0.0):
+    def get_action(self, state, target_pos=[0.0, 0.0]):
         x, x_dot, theta, theta_dot = state
         
-        error_x = target_pos - x 
-        self.integral_x += error_x * 0.001  # Assuming dt=0.001 for integral calculation
+        error_x = target_pos[0] - x 
+        self.integral_x += error_x * self.dt # Assuming dt=0.001 for integral calculation
         derivative_x = 0 - x_dot  #d/dt(target - x) = 0 - velocity
 
         desired_theta = (self.kp_x * error_x) + (self.ki_x * self.integral_x) + (self.kd_x * derivative_x)
