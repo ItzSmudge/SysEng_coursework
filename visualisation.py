@@ -248,7 +248,7 @@ if __name__ == "__main__":
     initial_state = np.array([0.0, 0.0, 0.2, 0.0])  # Start with small angle
     
     # Simulate
-    trajectory = pend.simulate(initial_state, controller, steps=10000, target_pos=0.0)
+    trajectory = pend.simulate(initial_state, controller, steps=10000, target_pos=[0.0, 0.0])
     
     # Visualize
     # Option 1: Animated
