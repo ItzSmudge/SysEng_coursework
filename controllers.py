@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 import numpy as np
-
+import control as ct 
 class Controller(ABC):
     @abstractmethod
     def get_action(self, state, target_pos=0.0):
@@ -64,13 +64,4 @@ class PIDController(Controller):
         self.ki_x = ki_x
         self.kd_x = kd_x
 
-class LQRController(Controller):
-
-    def __init__(self):
-        pass
-
-    def get_action(self):
-        pass
-
-    def reset(self):
-        pass
+#class LQRController(Controller):
