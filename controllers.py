@@ -64,4 +64,66 @@ class PIDController(Controller):
         self.ki_x = ki_x
         self.kd_x = kd_x
 
-#class LQRController(Controller):
+class LQRController(Controller):
+    def __init__(self, M, m, l, b, I=None, g=9.81, Q=None, R=None):
+        if I is None:
+            self.I = (1/3) * m * (l**2)
+        else:
+            self.I = self.I
+    
+        
+        # linearise
+        denominator = self.I*(M + m) + M*m*(l**2)
+
+        # MatA (Jacobian with respect to state [x, x_dot, theta, theta_dot]
+        
+        A = np.array([
+            [0, 1, 0, 0],
+            [0, -(self.I + m*l**2)*b / denominator,  (m**2 * l**2 * g) / denominator, 0],
+            [0, 0, 0, 1],
+            [0, -(m*l*b) / denominator,(m * l * g * (M + m)) / denominator, 0]
+        ])
+
+        # Matrix B (Jacobian with respect to input u)
+        B = np.array([
+            [0],
+            [(self.I + m*l**2) / denominator],
+            [0],
+            [(m*l) / denominator]
+        ])
+
+        # Default Weights if none provided
+        if Q is None:
+            # Penalities: [Pos, Vel, Angle, AngVel]
+            Q = np.diag([1.0, 1.0, 10.0, 1.0]) 
+        if R is None:
+            R = np.array([[0.1]]) # Penalty on motor force
+
+        self.Q = Q
+        self.R = R
+
+        # K, S, E = control.lqr(A, B, Q, R)
+        # control.lqr returns K such that u = -Kx
+        self.K, _, _ = ct.lqr(A, B, self.Q, self.R)
+        
+        print("lqr gain matrix :", self.K)
+
+    def get_action(self, state, target_pos=[0.0, 0.0]):
+        # state [x, x_dot, theta, theta_dot]
+        # target[target_x, 0, 0, 0]
+        
+        tgt_x = target_pos[0] if isinstance(target_pos, (list, tuple, np.ndarray)) else target_pos
+        
+        current_state = np.array(state)
+        desired_state = np.array([tgt_x, 0.0, 0.0, 0.0])
+        
+        error = current_state - desired_state
+        
+        force = -np.dot(self.K, error)
+        
+        # Return scalar force
+        return float(force[0])
+
+    def reset(self):
+        # LQR is stateless (no integrators), so nothing to reset
+        pass

@@ -243,7 +243,9 @@ if __name__ == "__main__":
     controller = PIDController(kp_theta=75.0, kd_theta=2, ki_theta=0,kp_x=0, kd_x=0, ki_x=0)
     
     #controller = controller = LQRController(M=0.5, m=0.2, l=0.8, b=0.1, Q=np.diag([10.0, 1.0, 100.0, 1.0]), R=0.1)
-
+    Q = np.diag([10.0, 1.0, 100.0, 1.0])
+    R = np.array([[0.01]])
+    controller = LQRController(M=0.5, m=0.2, l=0.8, b=0.1, Q=Q, R=R)
     # controller = SimpleController()
     
     # Initial state: [x, x_dot, theta, theta_dot]
