@@ -75,7 +75,7 @@ class LQRController(Controller):
         # linearise
         denominator = self.I*(M + m) + M*m*(l**2)
 
-        # MatA (Jacobian with respect to state [x, x_dot, theta, theta_dot]
+        # MatA jacobian with respect to state [x, xdot, theta, theta dot]
         
         A = np.array([
             [0, 1, 0, 0],
@@ -112,18 +112,14 @@ class LQRController(Controller):
         # state [x, x_dot, theta, theta_dot]
         # target[target_x, 0, 0, 0]
         
-        tgt_x = target_pos[0] if isinstance(target_pos, (list, tuple, np.ndarray)) else target_pos
+        target_x = target_pos[0] if isinstance(target_pos, (list, tuple, np.ndarray)) else target_pos
         
         current_state = np.array(state)
-        desired_state = np.array([tgt_x, 0.0, 0.0, 0.0])
-        
+        desired_state = np.array([target_x, 0.0, 0.0, 0.0])
         error = current_state - desired_state
-        
         force = -np.dot(self.K, error)
-        
-        # Return scalar force
+
         return float(force[0])
 
     def reset(self):
-        # LQR is stateless (no integrators), so nothing to reset
         pass
