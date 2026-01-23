@@ -310,7 +310,7 @@ def visualize_trajectory_interactive(pendulum, initial_state, controller, steps=
         anim_state['paused'] = True
         params = {name: slider.val for name, slider in sliders.items()}
         update_queue.put(params)
-        print("✓ Applying changes... (will reset to t=0 when done)")
+        print("Applying changes... (will reset to t=0 when done)")
     
     button_play.on_clicked(play_clicked)
     button_pause.on_clicked(pause_clicked)
