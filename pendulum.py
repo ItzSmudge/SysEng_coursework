@@ -29,12 +29,12 @@ class Pendulum:
         next_state[2] = theta_dot
         next_state[3] =  (-(self.m*self.l*self.b)*x_dot/self.denominator) + theta * (self.m*self.l*self.g*(self.M + self.m)/self.denominator) + u * (self.m*self.l)/self.denominator
 
-        next_state[1] += Fd * (self.I + self.m*self.l**2) / self.denominator
-        next_state[3] += Fd * (self.m*self.l) / self.denominator
+        next_state[1] += Fd[0,0] * (self.I + self.m*self.l**2) / self.denominator
+        next_state[3] += Fd[0,1] * (self.m*self.l) / self.denominator
 
         return next_state
 
-    def step(self, state, u, Fd=0.0, dt=None):
+    def step(self, state, u, Fd=np.array([[0.0, 0.0]]), dt=None):
         if dt is None:
             dt = self.dt
 
@@ -54,7 +54,7 @@ class Pendulum:
 
             u = controller.get_action(state, target_pos)
 
-            Fd = 0.0
+            Fd = np.array([[0.0, 0.0]])
 
             if self.mode == "1":
 
@@ -66,9 +66,9 @@ class Pendulum:
 
                 # If disturbance chosen, apply one impulse
                 if self.apply_disturbance:
-                    Fd = np.random.uniform(-3500, 3500)
+                    Fd = np.random.uniform(-3500, 3500, size=(1,2))
                     self.apply_disturbance = False
-                    print(f"Disturbance applied at step {t}: Fd={Fd:.2f}")
+                    print(f"Disturbance applied at step {t}: Fd_x={Fd[0,0]:.2f}, Fd_theta={Fd[0,1]:.2f}")
 
             state = self.step(state, u, Fd)
 
