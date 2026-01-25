@@ -231,7 +231,7 @@ def plot_results(pendulum, trajectory):
 # Example usage:
 if __name__ == "__main__":
     # Create pendulum
-    pend = Pendulum(M=0.5, m=0.2, l=0.8, b=0.1, dt=0.001, mode="1", disturbance_level=1)
+    pend = Pendulum(M=0.5, m=0.2, l=0.8, b=0.1, dt=0.001, mode="1", disturbance_level=0)
     
     # Create a simple controller (example: constant force or proportional control)
     class SimpleController:
