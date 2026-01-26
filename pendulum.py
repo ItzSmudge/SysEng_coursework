@@ -98,5 +98,5 @@ class Pendulum:
         if std_dev is None:
             std_dev = self.noise_std_dev
         noise = np.random.normal(0, std_dev, size=state.shape)
-        return state + noise
+        return noise
         
