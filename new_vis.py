@@ -525,7 +525,7 @@ if __name__ == "__main__":
     pend = Pendulum(M=0.5, m=0.2, l=0.8, b=0.1, dt=0.001, mode="1", disturbance_level=0)
     
     # PID Controller
-    controller = PIDController(kp_theta=750.0, kd_theta=20.0, ki_theta=0, kp_x=10, kd_x=0, ki_x=0)
+    controller = PIDController(kp_theta=75, kd_theta=2, ki_theta=0, kp_x=10, kd_x=0, ki_x=0)
     
     # LQR Controller
     #Q = np.diag([10.0, 1.0, 100.0, 1.0])
