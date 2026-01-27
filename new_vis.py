@@ -4,7 +4,7 @@ from matplotlib.patches import Rectangle
 from matplotlib.widgets import Slider, Button
 import numpy as np
 from pendulum import Pendulum
-from controllers import PIDController, LQRController
+from controllers import PIDController, LQRController, TrajectoryPIDController
 import threading
 import queue
 
@@ -118,7 +118,7 @@ def visualize_trajectory_interactive(pendulum, initial_state, controller, steps=
     slider_height = 0.015
     slider_spacing = 0.025
     
-    if controller_type == "PIDController":
+    if controller_type == "PIDController" or controller_type == "TrajectoryPIDController":
         slider_start_y = 0.19
         
         fig.text(0.5, slider_start_y + 0.03, 'Angle Control', 
@@ -502,7 +502,7 @@ def visualize_trajectory_interactive(pendulum, initial_state, controller, steps=
     
     # Create animation
     anim = animation.FuncAnimation(fig, animate, init_func=init,
-                                   frames=None, interval=0.01,
+                                   frames=None, interval=0.001,
                                    blit=True, repeat=True, cache_frame_data=False)
     
     def on_close(event):
@@ -522,16 +522,25 @@ def visualize_trajectory_interactive(pendulum, initial_state, controller, steps=
 
 # Example usage:
 if __name__ == "__main__":
-    pend = Pendulum(M=0.5, m=0.2, l=0.8, b=0.1, dt=0.001, mode="1", disturbance_level=0, noise_std_dev=0)
+    initial_state = np.array([0.0, 0.0, 0.1, 0.0])
+    # pend = Pendulum(M=0.5, m=0.2, l=0.8, b=0.1, dt=0.001, mode="1", disturbance_level=4, noise_std_dev=1)
     
     # PID Controller
-    controller = PIDController(kp_theta=75.0, kd_theta=2.0, ki_theta=0, kp_x=0, kd_x=0, ki_x=0)
+    # controller = PIDController(kp_theta=100.0, kd_theta=15.0, ki_theta=3, kp_x=0.008, kd_x=0, ki_x=0)
     
     # LQR Controller
     #Q = np.diag([10.0, 1.0, 100.0, 1.0])
     #R = np.array([[0.01]])
     #controller = LQRController(M=0.5, m=0.2, l=0.8, b=0.1, Q=Q, R=R)
     
-    initial_state = np.array([0.0, 0.0, 0.2, 0.0])
+    # visualize_trajectory_interactive(pend, initial_state, controller, steps=10000, target_pos=[0.0, 0.0])
+
+    # Sprint
+    pend = Pendulum(M=1.0, m=0.3, l=1.0, b=0.2, dt=0.001, mode="1", disturbance_level=0, noise_std_dev=0.5)
+    controller = TrajectoryPIDController(kp_theta=150.0, kd_theta=20.0, ki_theta=5, kp_x=5, kd_x=1, ki_x=0.2, trajectory_duration=1)
+
+    visualize_trajectory_interactive(pend, initial_state, controller, steps=10000, target_pos=[2.0, 0.0])
+
     
-    visualize_trajectory_interactive(pend, initial_state, controller, steps=10000, target_pos=[0.0, 0.0])
+    
+    
