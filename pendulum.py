@@ -4,7 +4,7 @@ import scipy.integrate
 
 class Pendulum:
 
-    def __init__(self, M, m, l, b, dt=0.001, I=None, g=9.81, controller=None, mode="1", disturbance_level=1):
+    def __init__(self, M, m, l, b, dt=0.001, I=None, g=9.81, controller=None, mode="1", disturbance_level=1, noise_std_dev=0.1):
         self.I = I if I is not None else (1/3) *m*(l**2)
         self.M = M
         self.m = m
@@ -16,8 +16,9 @@ class Pendulum:
         self.mode = mode
         self.disturbance_level = disturbance_level
         self.apply_disturbance = False
+        self.noise_std_dev = noise_std_dev
 
-    def dynamics(self, t, state, u, Fd=0.0):
+    def dynamics(self, t, state, u, Fd=0.0, noise=np.array([0.0, 0.0, 0.0, 0.0])):
         x = state[0]
         x_dot = state[1]
         theta = state[2]
@@ -29,19 +30,19 @@ class Pendulum:
         next_state[2] = theta_dot
         next_state[3] =  (-(self.m*self.l*self.b)*x_dot/self.denominator) + theta * (self.m*self.l*self.g*(self.M + self.m)/self.denominator) + u * (self.m*self.l)/self.denominator
 
-        next_state[1] += Fd * (self.I + self.m*self.l**2) / self.denominator
-        next_state[3] += Fd * (self.m*self.l) / self.denominator
+        next_state[1] += Fd[0,0] * (self.I + self.m*self.l**2) / self.denominator
+        next_state[3] += Fd[0,1] * (self.m*self.l) / self.denominator
 
-        return next_state
+        return next_state + noise
 
-    def step(self, state, u, Fd=0.0, dt=None):
+    def step(self, state, u, Fd=np.array([[0.0, 0.0]]), dt=None, noise=np.array([0.0, 0.0, 0.0, 0.0])):
         if dt is None:
             dt = self.dt
 
-        k1 = self.dynamics(0, state, u, Fd)
-        k2 = self.dynamics(0, state + 0.5 * dt * k1, u, Fd)
-        k3 = self.dynamics(0, state + 0.5 * dt * k2, u, Fd)
-        k4 = self.dynamics(0, state + dt * k3, u, Fd)
+        k1 = self.dynamics(0, state, u, Fd, noise)
+        k2 = self.dynamics(0, state + 0.5 * dt * k1, u, Fd, noise)
+        k3 = self.dynamics(0, state + 0.5 * dt * k2, u, Fd, noise)
+        k4 = self.dynamics(0, state + dt * k3, u, Fd, noise)
 
         return state + (dt / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
 
@@ -54,7 +55,7 @@ class Pendulum:
 
             u = controller.get_action(state, target_pos)
 
-            Fd = 0.0
+            Fd = np.array([[0.0, 0.0]])
 
             if self.mode == "1":
 
@@ -66,11 +67,13 @@ class Pendulum:
 
                 # If disturbance chosen, apply one impulse
                 if self.apply_disturbance:
-                    Fd = np.random.uniform(-3500, 3500)
+                    Fd = np.random.uniform(-3500, 3500, size=(1,2))
                     self.apply_disturbance = False
-                    print(f"Disturbance applied at step {t}: Fd={Fd:.2f}")
+                    print(f"Disturbance applied at step {t}: Fd_x={Fd[0,0]:.2f}, Fd_theta={Fd[0,1]:.2f}")
 
-            state = self.step(state, u, Fd)
+            noise = self.noise(state, std_dev=self.noise_std_dev)
+
+            state = self.step(state, u, Fd, noise=noise)
 
             trajectory[t] = state
             if t == 1:
@@ -90,4 +93,10 @@ class Pendulum:
 
         disturbance[choice] = np.random.uniform(-magnitude, magnitude)
         return state + disturbance
+
+    def noise(self, state, std_dev=None):
+        if std_dev is None:
+            std_dev = self.noise_std_dev
+        noise = np.random.normal(0, std_dev, size=state.shape)
+        return noise
         
