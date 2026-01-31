@@ -103,6 +103,11 @@ class LQRController(Controller):
 
         self.Q = Q
         self.R = R
+        self.M = M
+        self.m = m
+        self.l = l
+        self.b = b
+        self.g = g
 
         # K, S, E = control.lqr(A, B, Q, R)
         # control.lqr returns K such that u = -Kx
