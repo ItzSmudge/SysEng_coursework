@@ -643,9 +643,11 @@ if __name__ == "__main__":
     # LQR Controller
     Q = np.diag([10.0, 1.0, 100.0, 1.0])
     R = np.array([[0.01]])
-    controller = LQRController(M=0.5, m=0.2, l=0.8, b=0.1, Q=Q, R=R, filter_enabled=True)
+    controller = LQRController(M=0.5, m=0.2, l=0.8, b=0.1, Q=Q, R=R, filter_enabled=True, window_size=50)
+    # controller = PIDController(kp_x=0.0, kd_x=0.0, ki_x=0.0,
+    #                            kp_theta=120.0, kd_theta=20.0, ki_theta=5.0)
     
     # Sprint
     pend = Pendulum(M=1.0, m=0.3, l=1.0, b=0.2, dt=0.001, mode="1", disturbance_level=0)
 
-    visualize_trajectory_interactive(pend, initial_state, controller, steps=10000, target_pos=[2.0, 0.0])
+    visualize_trajectory_interactive(pend, initial_state, controller, steps=10000, target_pos=[0.0, 0.0])
