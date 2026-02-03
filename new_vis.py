@@ -275,7 +275,7 @@ def visualize_trajectory_interactive(pendulum, initial_state, controller, steps=
                 if params is None:
                     break
                 
-                print("⏳ Running simulation with new parameters...")
+                print("Running simulation with new parameters...")
                 
                 # Extract simulation parameters
                 current_target_pos = params.get('target_pos', target_pos[0])
