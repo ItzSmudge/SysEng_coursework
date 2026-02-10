@@ -1,5 +1,6 @@
 // AS22 Encoder - Basic Signal Test
 // This will show you if ANY signals are coming from the encoder
+// 
 
 const int encoderPinA = 2;  // Channel A
 const int encoderPinB = 3;  // Channel B
