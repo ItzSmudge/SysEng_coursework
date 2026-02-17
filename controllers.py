@@ -1,6 +1,9 @@
 from abc import ABC, abstractmethod
 import numpy as np
 import control as ct 
+from filters import MovingAverageFilter
+
+
 class Controller(ABC):
     @abstractmethod
     def get_action(self, state, target_pos=0.0):
@@ -12,7 +15,7 @@ class Controller(ABC):
 
 class PIDController(Controller):
 
-    def __init__(self, kp_theta=0.0, kd_theta=0.0, ki_theta=0.0, kp_x=0.0, kd_x=0.0, ki_x=0.0, dt=0.001, i_limit_theta=10.0, i_limit_x=10.0):
+    def __init__(self, kp_theta=0.0, kd_theta=0.0, ki_theta=0.0, kp_x=0.0, kd_x=0.0, ki_x=0.0, dt=0.001, i_limit_theta=10.0, i_limit_x=10.0, window_size=10,filter_enabled=False):
         self.kp_theta = kp_theta
         self.ki_theta = ki_theta
         self.kd_theta = kd_theta
@@ -30,9 +33,20 @@ class PIDController(Controller):
 
         self.i_limit_theta = i_limit_theta
         self.i_limit_x = i_limit_x
-    
+        self.filter_enabled = filter_enabled
+        if self.filter_enabled:
+            self.filter_theta = MovingAverageFilter(window_size)
+            self.filter_x = MovingAverageFilter(window_size)
+        else:
+            self.filter_theta = None
+            self.filter_x = None
+
     def get_action(self, state, target_pos=[0.0, 0.0]):
         x, x_dot, theta, theta_dot = state
+
+        if self.filter_enabled:
+            theta = self.filter_theta.apply(theta)
+            x = self.filter_x.apply(x)
         
         target_x = target_pos[0]
 
@@ -67,7 +81,7 @@ class PIDController(Controller):
         self.kd_x = kd_x
 
 class LQRController(Controller):
-    def __init__(self, M, m, l, b, I=None, g=9.81, Q=None, R=None):
+    def __init__(self, M, m, l, b, I=None, g=9.81, Q=None, R=None, window_size=10, filter_enabled=False):
         if I is None:
             self.I = (1/3) * m * (l**2)
         else:
@@ -109,6 +123,13 @@ class LQRController(Controller):
         self.b = b
         self.g = g
 
+        if filter_enabled:
+            self.filter_enabled = True
+            self.filter_state = MovingAverageFilter(window_size)
+        else:
+            self.filter_enabled = False
+            self.filter_state = None
+
         # K, S, E = control.lqr(A, B, Q, R)
         # control.lqr returns K such that u = -Kx
         self.K, _, _ = ct.lqr(A, B, self.Q, self.R)
@@ -118,6 +139,8 @@ class LQRController(Controller):
     def get_action(self, state, target_pos=[0.0, 0.0]):
         # state [x, x_dot, theta, theta_dot]
         # target[target_x, 0, 0, 0]
+        if self.filter_enabled:
+            state = self.filter_state.apply(state)
         
         target_x = target_pos[0] if isinstance(target_pos, (list, tuple, np.ndarray)) else target_pos
         
@@ -140,7 +163,7 @@ class TrajectoryPIDController(Controller):
     
     def __init__(self, kp_theta=75.0, kd_theta=2.0, ki_theta=0.0, 
                  kp_x=5.0, kd_x=8.0, ki_x=0.1, dt=0.001, 
-                 trajectory_duration=5.0):
+                 trajectory_duration=5.0, window_size=10, filter_enabled=False):
         self.kp_theta = kp_theta
         self.ki_theta = ki_theta
         self.kd_theta = kd_theta
@@ -160,6 +183,13 @@ class TrajectoryPIDController(Controller):
         self.x_start = None
         self.x_target = None
         self.trajectory_active = False
+        self.filter_enabled = filter_enabled
+        if self.filter_enabled:
+            self.filter_theta = MovingAverageFilter(window_size)
+            self.filter_x = MovingAverageFilter(window_size)
+        else:
+            self.filter_theta = None
+            self.filter_x = None
     
     def generate_trajectory(self, t_elapsed):
         """
@@ -192,6 +222,10 @@ class TrajectoryPIDController(Controller):
     
     def get_action(self, state, target_pos=[0.0, 0.0], current_time=None):
         x, x_dot, theta, theta_dot = state
+
+        if self.filter_enabled:
+            theta = self.filter_theta.apply(theta)
+            x = self.filter_x.apply(x)
 
         if abs(x - target_pos[0]) < 0.1:
             return 0.0

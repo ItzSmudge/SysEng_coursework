@@ -31,13 +31,14 @@ def visualize_trajectory_interactive(pendulum, initial_state, controller, steps=
     control_log = []
     state = initial_state.copy()
     for t in range(steps):
-        u = controller.get_action(state, target_pos)
+        # Controller reads noisy observations
+        noisy_state = pendulum.get_noisy_observation(state, std_dev=pendulum.noise_std_dev)
+        u = controller.get_action(noisy_state, target_pos)
         control_log.append(u)
         Fd = np.array([[0.0, 0.0]])
         if t < len(disturbance_log):
             Fd = disturbance_log[t]
-        noise = pendulum.noise(state, std_dev=pendulum.noise_std_dev)
-        state = pendulum.step(state, u, Fd, noise=noise)
+        state = pendulum.step(state, u, Fd)
     
     sim_data['trajectory'] = trajectory
     sim_data['disturbance_log'] = disturbance_log
@@ -54,11 +55,11 @@ def visualize_trajectory_interactive(pendulum, initial_state, controller, steps=
     print(control_input)
 
     # ============ WINDOW 1: Animation + Controls ============
-    fig_anim = plt.figure(figsize=(10, 10))
+    fig_anim = plt.figure(figsize=(16, 10))
     fig_anim.canvas.manager.set_window_title('Pendulum Animation & Controls')
     
-    # Animation subplot
-    ax_anim = plt.subplot2grid((1, 1), (0, 0))
+    # Animation subplot - takes up most of the space
+    ax_anim = fig_anim.add_axes([0.22, 0.35, 0.75, 0.60])
     ax_anim.set_xlim(-3, 3)
     ax_anim.set_ylim(-1, 4)
     ax_anim.set_aspect('equal')
@@ -80,17 +81,40 @@ def visualize_trajectory_interactive(pendulum, initial_state, controller, steps=
                              bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
     disturbance_line, = ax_anim.plot([], [], color='purple', lw=5, alpha=0.0)
     
-    plt.tight_layout(rect=[0, 0.35, 1, 1])
+    # ============ LEFT PANEL: SIMULATION PARAMETERS ============
+    # Simulation parameters on the left
+    left_panel_x = 0.02
+    sim_param_start_y = 0.9
     
-    # Sliders area
+    fig_anim.text(left_panel_x + 0.08, sim_param_start_y, 'Simulation Parameters', 
+            fontsize=11, fontweight='bold', 
+            bbox=dict(boxstyle='round', facecolor='lightgray', alpha=0.8, pad=0.5))
+    
+    # Target Position slider (vertical, spaced below title)
+    ax_target = fig_anim.add_axes([left_panel_x + 0.01, sim_param_start_y - 0.35, 0.04, 0.20])
+    slider_target = Slider(ax_target, 'Target Pos', -3, 3, valinit=target_pos[0], color='orange', valstep=0.1, orientation='vertical')
+    
+    # Noise Level slider (vertical, next to Target Position)
+    ax_noise = fig_anim.add_axes([left_panel_x + 0.07, sim_param_start_y - 0.35, 0.04, 0.20])
+    slider_noise = Slider(ax_noise, 'Sensor Noise', 0.0, 1.0, valinit=pendulum.noise_std_dev, color='pink', valstep=0.01, orientation='vertical')
+    
+    # Disturbance Level slider (vertical, next to Noise Level)
+    ax_disturbance = fig_anim.add_axes([left_panel_x + 0.13, sim_param_start_y - 0.35, 0.04, 0.20])
+    slider_disturbance = Slider(ax_disturbance, 'Disturbance', 0, 5, valinit=pendulum.disturbance_level, color='plum', valstep=0.1, orientation='vertical')
+    
     sliders = {}
-    slider_left = 0.12
-    slider_width = 0.76
+    sliders['target_pos'] = slider_target
+    sliders['noise_std_dev'] = slider_noise
+    sliders['disturbance_level'] = slider_disturbance
+    
+    # Sliders area for controller parameters
+    slider_left = 0.2
+    slider_width = 0.75
     slider_height = 0.015
     slider_spacing = 0.025
     
     if controller_type == "PIDController" or controller_type == "TrajectoryPIDController":
-        slider_start_y = 0.29
+        slider_start_y = 0.2
         
         fig_anim.text(0.5, slider_start_y + 0.03, 'Angle Control', 
                 ha='center', fontsize=10, fontweight='bold', 
@@ -124,7 +148,7 @@ def visualize_trajectory_interactive(pendulum, initial_state, controller, steps=
             sliders[name] = slider
     
     elif controller_type == "LQRController":
-        slider_start_y = 0.29
+        slider_start_y = 0.2
         
         fig_anim.text(0.5, slider_start_y + 0.03, 'State Cost Matrix Q', 
                 ha='center', fontsize=10, fontweight='bold', 
@@ -154,19 +178,19 @@ def visualize_trajectory_interactive(pendulum, initial_state, controller, steps=
     # Control buttons
     button_width = 0.10
     button_height = 0.03
-    button_y = 0.36
+    button_y = 0.02
     button_spacing = 0.12
 
-    ax_play = plt.axes([0.25, button_y, button_width, button_height])
+    ax_play = plt.axes([0.35, button_y, button_width, button_height])
     button_play = Button(ax_play, '▶ Play', color='lightgreen', hovercolor='green')
 
-    ax_pause = plt.axes([0.25 + button_spacing, button_y, button_width, button_height])
+    ax_pause = plt.axes([0.35 + button_spacing, button_y, button_width, button_height])
     button_pause = Button(ax_pause, '⏸ Pause', color='yellow', hovercolor='gold')
 
-    ax_reset = plt.axes([0.25 + 2*button_spacing, button_y, button_width, button_height])
+    ax_reset = plt.axes([0.35 + 2*button_spacing, button_y, button_width, button_height])
     button_reset = Button(ax_reset, '↻ Reset', color='lightcoral', hovercolor='red')
 
-    ax_apply = plt.axes([0.25 + 3*button_spacing, button_y, button_width, button_height])
+    ax_apply = plt.axes([0.35 + 3*button_spacing, button_y, button_width, button_height])
     button_apply = Button(ax_apply, '✓ Apply', color='lightskyblue', hovercolor='deepskyblue')
     
     # ============ WINDOW 2: Graphs ============
@@ -251,11 +275,23 @@ def visualize_trajectory_interactive(pendulum, initial_state, controller, steps=
                 if params is None:
                     break
                 
-                print("⏳ Running simulation with new parameters...")
+                print("Running simulation with new parameters...")
                 
-                # Update controller with new parameters
+                # Extract simulation parameters
+                current_target_pos = params.get('target_pos', target_pos[0])
+                current_noise_std = params.get('noise_std_dev', pendulum.noise_std_dev)
+                current_disturbance = params.get('disturbance_level', pendulum.disturbance_level)
+                
+                # Update pendulum simulation parameters
+                pendulum.noise_std_dev = current_noise_std
+                pendulum.disturbance_level = current_disturbance
+                
+                # Update controller with new parameters (excluding simulation params)
+                controller_params = {k: v for k, v in params.items() 
+                                    if k not in ['target_pos', 'noise_std_dev', 'disturbance_level']}
+                
                 if controller_type == "PIDController" or controller_type == "TrajectoryPIDController":
-                    controller.set_kvalues(**params)
+                    controller.set_kvalues(**controller_params)
                 elif controller_type == "LQRController":
                     Q = np.diag([params['q_x'], params['q_x_dot'], params['q_theta'], params['q_theta_dot']])
                     R = np.array([[params['r']]])
@@ -276,21 +312,23 @@ def visualize_trajectory_interactive(pendulum, initial_state, controller, steps=
                     controller.K, _, _ = ct.lqr(A, B, Q, R)
                     print(f"✓ LQR gains: K = {controller.K.flatten()}")
                 
-                # Reset and re-run simulation
+                # Reset and re-run simulation with new target position
                 controller.reset()
-                new_trajectory, new_disturbance_log = pendulum.simulate(initial_state.copy(), controller, steps, target_pos)
+                new_target = [current_target_pos, 0.0]
+                new_trajectory, new_disturbance_log = pendulum.simulate(initial_state.copy(), controller, steps, new_target)
                 
                 # Re-compute control inputs
                 new_control_log = []
                 state = initial_state.copy()
                 for t in range(steps):
-                    u = controller.get_action(state, target_pos)
+                    # Controller reads noisy observations
+                    noisy_state = pendulum.get_noisy_observation(state, std_dev=current_noise_std)
+                    u = controller.get_action(noisy_state, new_target)
                     new_control_log.append(u)
                     Fd = np.array([[0.0, 0.0]])
                     if t < len(new_disturbance_log):
                         Fd = new_disturbance_log[t]
-                    noise = pendulum.noise(state, std_dev=pendulum.noise_std_dev)
-                    state = pendulum.step(state, u, Fd, noise=noise)
+                    state = pendulum.step(state, u, Fd)
                 
                 # Update shared data
                 with sim_data['lock']:
@@ -325,9 +363,22 @@ def visualize_trajectory_interactive(pendulum, initial_state, controller, steps=
         
         print("↻ Resetting with current slider values...")
         
+        # Extract simulation parameters
+        current_target_pos = params.get('target_pos', target_pos[0])
+        current_noise_std = params.get('noise_std_dev', pendulum.noise_std_dev)
+        current_disturbance = params.get('disturbance_level', pendulum.disturbance_level)
+        
+        # Update pendulum simulation parameters
+        pendulum.noise_std_dev = current_noise_std
+        pendulum.disturbance_level = current_disturbance
+        
+        # Update controller with new parameters (excluding simulation params)
+        controller_params = {k: v for k, v in params.items() 
+                            if k not in ['target_pos', 'noise_std_dev', 'disturbance_level']}
+        
         # Update controller with current slider parameters
         if controller_type == "PIDController" or controller_type == "TrajectoryPIDController":
-            controller.set_kvalues(**params)
+            controller.set_kvalues(**controller_params)
         elif controller_type == "LQRController":
             Q = np.diag([params['q_x'], params['q_x_dot'], params['q_theta'], params['q_theta_dot']])
             R = np.array([[params['r']]])
@@ -348,21 +399,23 @@ def visualize_trajectory_interactive(pendulum, initial_state, controller, steps=
             controller.K, _, _ = ct.lqr(A, B, Q, R)
             print(f"LQR gains: K = {controller.K.flatten()}")
         
-        # Reset and re-run simulation
+        # Reset and re-run simulation with new target position
         controller.reset()
-        new_trajectory, new_disturbance_log = pendulum.simulate(initial_state.copy(), controller, steps, target_pos)
+        new_target = [current_target_pos, 0.0]
+        new_trajectory, new_disturbance_log = pendulum.simulate(initial_state.copy(), controller, steps, new_target)
         
         # Re-compute control inputs
         new_control_log = []
         state = initial_state.copy()
         for t in range(steps):
-            u = controller.get_action(state, target_pos)
+            # Controller reads noisy observations
+            noisy_state = pendulum.get_noisy_observation(state, std_dev=current_noise_std)
+            u = controller.get_action(noisy_state, new_target)
             new_control_log.append(u)
             Fd = np.array([[0.0, 0.0]])
             if t < len(new_disturbance_log):
                 Fd = new_disturbance_log[t]
-            noise = pendulum.noise(state, std_dev=pendulum.noise_std_dev)
-            state = pendulum.step(state, u, Fd, noise=noise)
+            state = pendulum.step(state, u, Fd)
         
         # Update data
         nonlocal x, x_dot, theta, theta_dot, control_input
@@ -564,7 +617,7 @@ def visualize_trajectory_interactive(pendulum, initial_state, controller, steps=
     
     # Create animation
     anim = animation.FuncAnimation(fig_anim, animate, init_func=init,
-                                   frames=None, interval=10,
+                                   frames=None, interval=5,
                                    blit=True, repeat=True, cache_frame_data=False)
     
     def on_close(event):
@@ -590,9 +643,11 @@ if __name__ == "__main__":
     # LQR Controller
     Q = np.diag([10.0, 1.0, 100.0, 1.0])
     R = np.array([[0.01]])
-    controller = LQRController(M=0.5, m=0.2, l=0.8, b=0.1, Q=Q, R=R)
+    controller = LQRController(M=0.5, m=0.2, l=0.8, b=0.1, Q=Q, R=R, filter_enabled=True, window_size=50)
+    # controller = PIDController(kp_x=0.0, kd_x=0.0, ki_x=0.0,
+    #                            kp_theta=120.0, kd_theta=20.0, ki_theta=5.0)
     
     # Sprint
     pend = Pendulum(M=1.0, m=0.3, l=1.0, b=0.2, dt=0.001, mode="1", disturbance_level=0)
 
-    visualize_trajectory_interactive(pend, initial_state, controller, steps=10000, target_pos=[2.0, 0.0])
+    visualize_trajectory_interactive(pend, initial_state, controller, steps=10000, target_pos=[0.0, 0.0])
