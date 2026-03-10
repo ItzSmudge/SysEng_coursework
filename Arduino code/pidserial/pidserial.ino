@@ -9,16 +9,16 @@
 MotoronI2C mc1(16); // Front motor driver
 MotoronI2C mc2(17); // Back motor driver
 
-const int MAX_SPEED = 800;  // Motoron max speed is 800
-const int MIN_SPEED = -800; // Motoron min speed
+const int MAX_SPEED = 800;   // Motoron max speed is 800
+const int MIN_SPEED = -800;  // Motoron min speed
 const int PWM_to_motor = 1;
 const int MOTORS_FORWARD = -1;
 
 // ============================================
 // ENCODER CONFIGURATION
 // ============================================
-const int encoderPinA = 2;
-const int encoderPinB = 3;
+const int encoderPinA = 10;
+const int encoderPinB = 11;
 const int encoderIndex = 4;
 const int COUNTS_PER_REV = 4096;
 volatile long encoderCount = 0;
@@ -29,36 +29,31 @@ volatile int lastStateB = 0;
 // ============================================
 // MOVING AVERAGE FILTER CLASS
 // ============================================
-class MovingAverageFilter
-{
+class MovingAverageFilter {
 private:
-  float *buffer;
+  float* buffer;
   int windowSize;
   int bufferIndex;
   int bufferCount;
   float sum;
 
 public:
-  MovingAverageFilter(int size)
-  {
+  MovingAverageFilter(int size) {
     windowSize = size;
     buffer = new float[windowSize];
     bufferIndex = 0;
     bufferCount = 0;
     sum = 0.0;
-    for (int i = 0; i < windowSize; i++)
-    {
+    for (int i = 0; i < windowSize; i++) {
       buffer[i] = 0.0;
     }
   }
 
-  ~MovingAverageFilter()
-  {
+  ~MovingAverageFilter() {
     delete[] buffer;
   }
 
-  float apply(float value)
-  {
+  float apply(float value) {
     // Remove oldest value from sum
     sum -= buffer[bufferIndex];
     // Add new value
@@ -67,21 +62,18 @@ public:
     // Update index (circular buffer)
     bufferIndex = (bufferIndex + 1) % windowSize;
     // Update count until buffer is full
-    if (bufferCount < windowSize)
-    {
+    if (bufferCount < windowSize) {
       bufferCount++;
     }
     // Return average
     return sum / bufferCount;
   }
 
-  void reset()
-  {
+  void reset() {
     bufferIndex = 0;
     bufferCount = 0;
     sum = 0.0;
-    for (int i = 0; i < windowSize; i++)
-    {
+    for (int i = 0; i < windowSize; i++) {
       buffer[i] = 0.0;
     }
   }
@@ -90,8 +82,7 @@ public:
 // ============================================
 // PID CONTROLLER CLASS
 // ============================================
-class PIDController
-{
+class PIDController {
 private:
   // PID gains
   float kp_theta, ki_theta, kd_theta;
@@ -104,8 +95,8 @@ private:
   float i_limit_x;
   // Filters
   bool filter_enabled;
-  MovingAverageFilter *filter_theta;
-  MovingAverageFilter *filter_x;
+  MovingAverageFilter* filter_theta;
+  MovingAverageFilter* filter_x;
   // Previous state for derivative calculation
   float prev_theta;
   float prev_x;
@@ -117,8 +108,7 @@ public:
   PIDController(float kp_t = 0.0, float kd_t = 0.0, float ki_t = 0.0,
                 float kp_pos = 0.0, float kd_pos = 0.0, float ki_pos = 0.0,
                 float timestep = 0.01, float i_lim_t = 10.0, float i_lim_pos = 10.0,
-                int window_size = 10, bool filter_en = false)
-  {
+                int window_size = 10, bool filter_en = false) {
     kp_theta = kp_t;
     ki_theta = ki_t;
     kd_theta = kd_t;
@@ -135,41 +125,32 @@ public:
     theta_dot = 0.0;
     x_dot = 0.0;
     filter_enabled = filter_en;
-    if (filter_enabled)
-    {
+    if (filter_enabled) {
       filter_theta = new MovingAverageFilter(window_size);
       filter_x = new MovingAverageFilter(window_size);
-    }
-    else
-    {
+    } else {
       filter_theta = nullptr;
       filter_x = nullptr;
     }
     lastTime = millis();
   }
 
-  ~PIDController()
-  {
-    if (filter_theta)
-      delete filter_theta;
-    if (filter_x)
-      delete filter_x;
+  ~PIDController() {
+    if (filter_theta) delete filter_theta;
+    if (filter_x) delete filter_x;
   }
 
-  float getAction(float x, float theta, float target_x = 0.0)
-  {
+  float getAction(float x, float theta, float target_x = 0.0) {
     // Calculate actual dt
     unsigned long currentTime = millis();
     float actual_dt = (currentTime - lastTime) / 1000.0;
-    if (actual_dt <= 0.0)
-      actual_dt = dt;
+    if (actual_dt <= 0.0) actual_dt = dt;
     lastTime = currentTime;
 
     // Apply filters if enabled
     float filtered_theta = theta;
     float filtered_x = x;
-    if (filter_enabled)
-    {
+    if (filter_enabled) {
       filtered_theta = filter_theta->apply(theta);
       filtered_x = filter_x->apply(x);
     }
@@ -198,24 +179,21 @@ public:
     return force;
   }
 
-  void reset()
-  {
+  void reset() {
     integral_theta = 0.0;
     integral_x = 0.0;
     prev_theta = 0.0;
     prev_x = 0.0;
     theta_dot = 0.0;
     x_dot = 0.0;
-    if (filter_enabled)
-    {
+    if (filter_enabled) {
       filter_theta->reset();
       filter_x->reset();
     }
     lastTime = millis();
   }
 
-  void setGains(float kp_t, float kd_t, float ki_t, float kp_pos, float kd_pos, float ki_pos)
-  {
+  void setGains(float kp_t, float kd_t, float ki_t, float kp_pos, float kd_pos, float ki_pos) {
     kp_theta = kp_t;
     ki_theta = ki_t;
     kd_theta = kd_t;
@@ -236,26 +214,25 @@ public:
 // ============================================
 // Initialize PID with example gains (tune these for your system)
 PIDController pid(
-    10000.0, // kp_theta
-    3000.0,  // kd_theta
-    300.0,   // ki_theta
-    30.0,    // kp_x
-    15.0,    // kd_x
-    0.30,    // ki_x
-    0.3,     // dt
-    50.0,    // i_limit_theta
-    10.0,    // i_limit_x
-    25,      // window_size
-    true     // filter_enabled
+  10000.0,   // kp_theta
+  3000.0,    // kd_theta
+  300.0,    // ki_theta
+  30.0,    // kp_x
+  15.0,    // kd_x
+  0.30,   // ki_x
+  0.3,   // dt
+  50.0,   // i_limit_theta
+  10.0,   // i_limit_x
+  25,      // window_size
+  true    // filter_enabled
 );
 
 // ============================================
 // SETUP
 // ============================================
-void setup()
-{
+void setup() {
   Serial.begin(115200);
-  Wire.begin(); // Join the I2C bus
+  Wire1.begin(); // Join the I2C bus
 
   // Configure encoder pins
   pinMode(encoderPinA, INPUT);
@@ -274,17 +251,22 @@ void setup()
   // Give the drivers a moment to power up
   delay(100);
 
-  // --- SETUP DRIVER 1 (Address 16) ---
-  mc1.reinitialize();   // Resets internal state variables in the library
-  mc1.disableCrc();     // Disable CRC for simple communication
-  mc1.clearResetFlag(); // Clear the "I just turned on" flag so it runs
+  mc1.setBus(&Wire1);
+  mc2.setBus(&Wire1);
 
+  // --- SETUP DRIVER 1 (Address 16) ---
+  mc1.reinitialize();       // Resets internal state variables in the library
+  mc1.disableCrc();         // Disable CRC for simple communication
+  mc1.clearResetFlag();     // Clear the "I just turned on" flag so it runs
+  mc1.disableCommandTimeout();
+  
   Serial.println("Driver 1 (Addr 16) Initialized.");
 
   // --- SETUP DRIVER 2 (Address 17) ---
   mc2.reinitialize();
   mc2.disableCrc();
   mc2.clearResetFlag();
+  mc2.disableCommandTimeout();
   Serial.println("Driver 2 (Addr 17) Initialized.");
 
   Serial.println("========================================");
@@ -293,22 +275,22 @@ void setup()
   Serial.println("System ready. Starting control loop...");
   Serial.println();
 
+  
+
   pid.reset();
 }
 
 // ============================================
 // MAIN LOOP
 // ============================================
-void loop()
-{
+void loop() {
   static unsigned long lastControl = 0;
   static unsigned long lastPrint = 0;
   unsigned long currentTime = millis();
   int motorSpeed = 0;
 
   // Control loop at 100Hz (10ms)
-  if (currentTime - lastControl >= 10)
-  {
+  if (currentTime - lastControl >= 10) {
     // Get current angle from encoder
     float theta = getAngleRadians();
 
@@ -332,13 +314,12 @@ void loop()
   }
 
   // Print debug info at 10Hz (100ms)
-  if (currentTime - lastPrint >= 100)
-  {
+  if (currentTime - lastPrint >= 100) {
     float theta = getAngleRadians();
     Serial.print("Theta: ");
     Serial.print(theta, 4);
     Serial.print(" rad | ");
-    Serial.print(theta * (180 / 3.14));
+    Serial.print(theta*(180/3.14));
     Serial.print(" Deg | ");
     Serial.print("Theta_dot: ");
     Serial.print(pid.getThetaDot(), 4);
@@ -361,80 +342,65 @@ void loop()
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
-float getAngleRadians()
-{
+float getAngleRadians() {
   // Convert encoder count to radians
   // Assuming 0 is upright position
   long count = encoderCount % COUNTS_PER_REV;
   float angle = (count * 2.0 * PI) / COUNTS_PER_REV;
 
   // Normalize to [-PI, PI]
-  if (angle > PI)
-  {
+  if (angle > PI) {
     angle -= 2.0 * PI;
   }
   return angle;
 }
 
-int forceToMotorSpeed(float force)
-{
+int forceToMotorSpeed(float force) {
   // Convert force to motor speed in range [-800, 800]
-  int speed = (int)constrain(force * PWM_to_motor, MIN_SPEED, MAX_SPEED);
+  int speed = (int)constrain(force*PWM_to_motor, MIN_SPEED, MAX_SPEED);
   Serial.println(speed);
   return MOTORS_FORWARD * speed;
 }
 
-void setMotorSpeed(int speed)
-{
+void setMotorSpeed(int speed) {
   // Set speed for both motors (front and back)
   // Motors 2 and 3 on each driver
-
+  
   // Front driver (mc1)
   mc1.setSpeed(2, speed);
   mc1.setSpeed(3, speed);
-
+  
   // Back driver (mc2)
   mc2.setSpeed(2, speed);
   mc2.setSpeed(3, speed);
 }
 
-void handleSerialCommands()
-{
-  if (Serial.available() > 0)
-  {
+void handleSerialCommands() {
+  if (Serial.available() > 0) {
     String command = Serial.readStringUntil('\n');
     command.trim();
 
-    if (command == "RESET")
-    {
+    if (command == "RESET") {
       pid.reset();
       Serial.println("PID reset");
-    }
-    else if (command.startsWith("SET "))
-    {
+    } else if (command.startsWith("SET ")) {
       // Example: SET 50 5 0.1 1 0.5 0.01
       // Format: SET kp_theta kd_theta ki_theta kp_x kd_x ki_x
       float gains[6];
       int idx = 0;
       int lastSpace = 3;
-      for (int i = 4; i < command.length() && idx < 6; i++)
-      {
-        if (command[i] == ' ' || i == command.length() - 1)
-        {
-          if (i == command.length() - 1)
-            i++;
+      for (int i = 4; i < command.length() && idx < 6; i++) {
+        if (command[i] == ' ' || i == command.length() - 1) {
+          if (i == command.length() - 1) i++;
           gains[idx++] = command.substring(lastSpace + 1, i).toFloat();
           lastSpace = i;
         }
       }
-      if (idx == 6)
-      {
+      if (idx == 6) {
         pid.setGains(gains[0], gains[1], gains[2], gains[3], gains[4], gains[5]);
         Serial.println("Gains updated");
       }
-    }
-    else if (command == "STOP")
-    {
+    } else if (command == "STOP") {
       setMotorSpeed(0);
       Serial.println("Motors stopped");
     }
@@ -444,52 +410,32 @@ void handleSerialCommands()
 // ============================================
 // INTERRUPT SERVICE ROUTINES
 // ============================================
-void updateEncoder()
-{
+void updateEncoder() {
   int currentStateA = digitalRead(encoderPinA);
   int currentStateB = digitalRead(encoderPinB);
 
-  if (lastStateA == LOW && currentStateA == HIGH)
-  {
-    if (currentStateB == LOW)
-    {
+  if (lastStateA == LOW && currentStateA == HIGH) {
+    if (currentStateB == LOW) {
       encoderCount++;
-    }
-    else
-    {
+    } else {
       encoderCount--;
     }
-  }
-  else if (lastStateA == HIGH && currentStateA == LOW)
-  {
-    if (currentStateB == HIGH)
-    {
+  } else if (lastStateA == HIGH && currentStateA == LOW) {
+    if (currentStateB == HIGH) {
       encoderCount++;
-    }
-    else
-    {
+    } else {
       encoderCount--;
     }
-  }
-  else if (lastStateB == LOW && currentStateB == HIGH)
-  {
-    if (currentStateA == HIGH)
-    {
+  } else if (lastStateB == LOW && currentStateB == HIGH) {
+    if (currentStateA == HIGH) {
       encoderCount++;
-    }
-    else
-    {
+    } else {
       encoderCount--;
     }
-  }
-  else if (lastStateB == HIGH && currentStateB == LOW)
-  {
-    if (currentStateA == LOW)
-    {
+  } else if (lastStateB == HIGH && currentStateB == LOW) {
+    if (currentStateA == LOW) {
       encoderCount++;
-    }
-    else
-    {
+    } else {
       encoderCount--;
     }
   }
@@ -498,8 +444,7 @@ void updateEncoder()
   lastStateB = currentStateB;
 }
 
-void handleIndex()
-{
+void handleIndex() {
   encoderCount = 0;
   indexFound = true;
 }
