@@ -214,16 +214,16 @@ public:
 // ============================================
 // Initialize PID with example gains (tune these for your system)
 PIDController pid(
-  10000.0,   // kp_theta
-  3000.0,    // kd_theta
-  300.0,    // ki_theta
-  30.0,    // kp_x
-  15.0,    // kd_x
-  0.30,   // ki_x
+  1000.0,   // kp_theta
+  500.0,    // kd_theta
+  30.0,    // ki_theta
+  0.0,    // kp_x
+  0.0,    // kd_x
+  0.0,   // ki_x
   0.3,   // dt
-  50.0,   // i_limit_theta
-  10.0,   // i_limit_x
-  25,      // window_size
+  5.0,   // i_limit_theta
+  1.0,   // i_limit_x
+  50,      // window_size
   true    // filter_enabled
 );
 
