@@ -121,10 +121,12 @@ def visualize_trajectory_interactive(pendulum, initial_state, controller, steps=
                 bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.7, pad=0.5))
         
         slider_configs = [
-            ('kp_theta', 0, 200, controller.kp_theta, 'Kp θ', 'lightblue'),
-            ('kd_theta', 0, 50, controller.kd_theta, 'Kd θ', 'lightblue'),
-            ('ki_theta', 0, 10, controller.ki_theta, 'Ki θ', 'lightblue'),
-        ]
+            ('q_x',         0.0, 500,  controller.Q[0, 0], 'Q[0,0] Position', 'khaki'),
+            ('q_x_dot',     0.0, 100,  controller.Q[1, 1], 'Q[1,1] Velocity', 'khaki'),
+            ('q_theta',     0.1, 2000, controller.Q[2, 2], 'Q[2,2] Angle',    'khaki'),
+            ('q_theta_dot', 0.1, 5000, controller.Q[3, 3], 'Q[3,3] Ang Vel',  'khaki'),
+            ('cart_mass',   0.1, 5.0,  controller.M,        'M Cart Mass (kg)','lightcyan'),
+       ]
         
         for i, (name, vmin, vmax, vinit, label, color) in enumerate(slider_configs):
             ax_slider = plt.axes([slider_left, slider_start_y - (i+1) * slider_spacing, slider_width, slider_height])
@@ -157,8 +159,8 @@ def visualize_trajectory_interactive(pendulum, initial_state, controller, steps=
         slider_configs = [
             ('q_x', 0.1, 500, controller.Q[0, 0], 'Q[0,0] Position', 'khaki'),
             ('q_x_dot', 0.1, 100, controller.Q[1, 1], 'Q[1,1] Velocity', 'khaki'),
-            ('q_theta', 0.1, 1000, controller.Q[2, 2], 'Q[2,2] Angle', 'khaki'),
-            ('q_theta_dot', 0.1, 100, controller.Q[3, 3], 'Q[3,3] Ang Vel', 'khaki'),
+            ('q_theta', 0.1, 3000, controller.Q[2, 2], 'Q[2,2] Angle', 'khaki'),
+            ('q_theta_dot', 0.1, 3000, controller.Q[3, 3], 'Q[3,3] Ang Vel', 'khaki'),
         ]
         
         for i, (name, vmin, vmax, vinit, label, color) in enumerate(slider_configs):
@@ -297,6 +299,7 @@ def visualize_trajectory_interactive(pendulum, initial_state, controller, steps=
                     R = np.array([[params['r']]])
                     controller.Q = Q
                     controller.R = R
+                    controller.M = 1.381
                     
                     # Recompute LQR gains
                     M, m, l, b, I, g = controller.M, controller.m, controller.l, controller.b, controller.I, controller.g
@@ -384,6 +387,7 @@ def visualize_trajectory_interactive(pendulum, initial_state, controller, steps=
             R = np.array([[params['r']]])
             controller.Q = Q
             controller.R = R
+            controller.M = params['cart_mass']
             
             # Recompute LQR gains
             M, m, l, b, I, g = controller.M, controller.m, controller.l, controller.b, controller.I, controller.g
@@ -637,17 +641,49 @@ def visualize_trajectory_interactive(pendulum, initial_state, controller, steps=
 
 
 # Example usage:
+'''
 if __name__ == "__main__":
     initial_state = np.array([0.0, 0.0, 0.1, 0.0])
     
     # LQR Controller
-    Q = np.diag([10.0, 1.0, 100.0, 1.0])
-    R = np.array([[0.01]])
-    controller = LQRController(M=0.5, m=0.2, l=0.8, b=0.1, Q=Q, R=R, filter_enabled=True, window_size=50)
+    Q = np.diag([10.0, 1.0, 1000.0, 3000.0])
+    R = np.array([[1.0]])
+    controller = LQRController(M=1.3816, m=0.05, l=0.6, b=0.1, Q=Q, R=R, filter_enabled=True, window_size=50)
     # controller = PIDController(kp_x=0.0, kd_x=0.0, ki_x=0.0,
     #                            kp_theta=120.0, kd_theta=20.0, ki_theta=5.0)
     
     # Sprint
     pend = Pendulum(M=1.0, m=0.3, l=1.0, b=0.2, dt=0.001, mode="1", disturbance_level=0)
+
+    visualize_trajectory_interactive(pend, initial_state, controller, steps=10000, target_pos=[0.0, 0.0])'''
+
+if __name__ == "__main__":
+    initial_state = np.array([0.0, 0.0, 0.1, 0.0])
+
+    # Q: design intent, not manual gains
+    # [cart pos, cart vel, pendulum angle, angular vel]
+    # Angle stability is top priority → q_theta highest
+    Q = np.diag([1.0, 1.0, 100.0, 10.0])
+    R = np.array([[0.1]])  # lower = more aggressive, raise if motors saturate
+
+    controller = LQRController(
+        M=1.3816,  # measured cart mass
+        m=0.05,    # bob mass (50g)
+        l=0.6,     # rod length to bob
+        b=0.1,     # friction — keep as estimate for now
+        Q=Q, R=R,
+        filter_enabled=True, window_size=50
+    )
+
+    # Pendulum simulation — must match controller physical params
+    pend = Pendulum(
+        M=1.3816,
+        m=0.05,
+        l=0.6,
+        b=0.1,
+        dt=0.001,
+        mode="1",
+        disturbance_level=0
+    )
 
     visualize_trajectory_interactive(pend, initial_state, controller, steps=10000, target_pos=[0.0, 0.0])
