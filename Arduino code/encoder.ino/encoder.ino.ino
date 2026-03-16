@@ -1,8 +1,8 @@
 // AS22 Encoder - Angle Tracking
 // Converts encoder pulses to precise angle measurements
 
-const int encoderPinA = 2;  // Channel A
-const int encoderPinB = 3;  // Channel B
+const int encoderPinA = 10;  // Channel A
+const int encoderPinB = 11;  // Channel B
 const int encoderIndex = 4; // Index pulse
 
 // AS22 Encoder specs: 500 PPR (Pulses Per Revolution)

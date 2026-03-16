@@ -330,6 +330,8 @@ void loop() {
     Serial.print(" | ");
     Serial.print("X_dot: ");
     Serial.print(lqr.getXDot(), 4);
+    Serial.print(" | input: ");
+    Serial.print(speed, 4);
     Serial.println();
     lastPrint = currentTime;
   }
