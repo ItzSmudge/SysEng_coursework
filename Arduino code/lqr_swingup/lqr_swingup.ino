@@ -50,11 +50,35 @@ const int SAMPLE_INTERVAL_US = 100; // 10kHz
 mbed::Ticker encoderTicker;
 
 // ============================================
-// SERIAL PLOTTER MODE
+// SWING-UP / STATE MACHINE CONFIGURATION
 // ============================================
-// Set to true  → Arduino Serial Plotter (Tools → Serial Plotter)
-// Set to false → Human-readable Serial Monitor
-bool PLOTTER_MODE = true;
+enum SystemState {
+  STATE_IDLE,       // Waiting for GO command
+  STATE_JERK,       // Applying initial impulse
+  STATE_BALANCING,  // LQR active
+  STATE_FALLEN      // Pendulum has fallen, back to idle
+};
+
+SystemState currentState = STATE_IDLE;
+
+// --- Jerk parameters (tune these on the bench) ---
+// Positive JERK_SPEED pushes cart one way; flip sign if pendulum goes wrong way.
+const int   JERK_SPEED_1    =  800;   // First kick speed (counts, raw motor units)
+const int   JERK_DURATION_1 =  425;   // Duration of first kick (ms)
+const int   JERK_SPEED_2    = -800;   // Brief reverse to decelerate cart
+const int   JERK_DURATION_2 =  300;   // Duration of reverse (ms)
+
+// --- LQR capture window ---
+// LQR only takes over when pendulum is within this angle of upright (rad).
+// Tighten once swing-up is reliable.
+const float CAPTURE_THRESHOLD_RAD = 0.35f;  // ~20 deg
+
+// --- Fall detection: if LQR is active and angle exceeds this, give up ---
+const float FALL_THRESHOLD_RAD    = 0.60f;  // ~34 deg
+
+// Jerk phase timing
+unsigned long jerkPhaseStart = 0;
+int           jerkPhase      = 0; // 0 = first kick, 1 = reverse, 2 = coast-to-capture
 
 // ============================================
 // TICKER CALLBACK: QUADRATURE SAMPLING
@@ -258,28 +282,17 @@ public:
 };
 
 // ============================================
-// GLOBAL OBJECTS & STATE
+// GLOBAL OBJECTS
 // ============================================
 LQRController lqr(
   0.0,     // k_x
   0.0,     // k_x_dot
   1000.0,  // k_theta
-  3000.0,  // k_theta_dot
+  2250.0,  // k_theta_dot
   0.01,    // dt
   5,       // window_size
   true     // filter_enabled
 );
-
-float target_x = 0.0;  // Updated by SPRINT command
-
-// ============================================
-// FUNCTION DECLARATIONS
-// ============================================
-float getAngleRadians();
-float getMotorPosition();
-int   forceToMotorSpeed(float force);
-void  setMotorSpeed(int speed);
-void  handleSerialCommands();
 
 // ============================================
 // SETUP
@@ -311,26 +324,25 @@ void setup() {
   mc1.disableCrc();
   mc1.clearResetFlag();
   mc1.disableCommandTimeout();
+  Serial.println("Driver 1 (Addr 16) Initialized.");
 
   mc2.reinitialize();
   mc2.disableCrc();
   mc2.clearResetFlag();
   mc2.disableCommandTimeout();
+  Serial.println("Driver 2 (Addr 17) Initialized.");
 
-  if (!PLOTTER_MODE) {
-    Serial.println("Driver 1 (Addr 16) Initialized.");
-    Serial.println("Driver 2 (Addr 17) Initialized.");
-    Serial.println("========================================");
-    Serial.println("LQR CONTROLLER WITH DUAL ENCODERS");
-    Serial.println("  Board    : Arduino GIGA R1 (mbed)");
-    Serial.println("  Encoder  : mbed::Ticker polling 10kHz");
-    Serial.println("  Pendulum : AS22  (Pins 10, 11, 4)");
-    Serial.println("  Motor    : Pololu 25D (Pins 12, 13)");
-    Serial.println("  CPR      : 4096 counts/rev");
-    Serial.println("========================================");
-    Serial.println("System ready. Starting control loop...");
-    Serial.println();
-  }
+  Serial.println("========================================");
+  Serial.println("LQR CONTROLLER WITH SWING-UP");
+  Serial.println("  Board    : Arduino GIGA R1 (mbed)");
+  Serial.println("  Encoder  : mbed::Ticker polling 10kHz");
+  Serial.println("  Pendulum : AS22  (Pins 10, 11, 4)");
+  Serial.println("  Motor    : Pololu 25D (Pins 12, 13)");
+  Serial.println("  CPR      : 4096 counts/rev");
+  Serial.println("========================================");
+  Serial.println("Commands: GO | STOP | RESET | GAINS | SET k_x k_xd k_th k_thd");
+  Serial.println("State: IDLE — send GO to begin swing-up");
+  Serial.println();
 
   lqr.reset();
 }
@@ -344,48 +356,103 @@ void loop() {
   static int motorSpeed            = 0;
   unsigned long currentTime        = millis();
 
-  // Control loop at 100Hz (10ms)
+  // ── Control loop at 100Hz ──
   if (currentTime - lastControl >= 10) {
     float theta = getAngleRadians();
     float x     = getMotorPosition();
 
-    float force = lqr.getAction(x, theta, target_x);
-    motorSpeed  = forceToMotorSpeed(force);
-    setMotorSpeed(motorSpeed);
+    switch (currentState) {
+
+      // ── IDLE: motors off, waiting for GO ──
+      case STATE_IDLE:
+        motorSpeed = 0;
+        setMotorSpeed(0);
+        break;
+
+      // ── JERK: two-phase open-loop impulse ──
+      case STATE_JERK: {
+        unsigned long elapsed = currentTime - jerkPhaseStart;
+
+        if (jerkPhase == 0) {
+          // Phase 0: initial kick
+          motorSpeed = MOTORS_FORWARD * JERK_SPEED_1;
+          setMotorSpeed(motorSpeed);
+          if (elapsed >= JERK_DURATION_1) {
+            jerkPhase      = 1;
+            jerkPhaseStart = currentTime;
+          }
+
+        } else if (jerkPhase == 1) {
+          // Phase 1: short reverse to shed cart momentum
+          motorSpeed = MOTORS_FORWARD * JERK_SPEED_2;
+          setMotorSpeed(motorSpeed);
+          if (elapsed >= JERK_DURATION_2) {
+            jerkPhase      = 2;
+            jerkPhaseStart = currentTime;
+          }
+
+        } else {
+          // Phase 2: coast and watch for LQR capture
+          motorSpeed = 0;
+          setMotorSpeed(0);
+
+          // Hand off to LQR once pendulum is near upright
+          if (fabs(theta) < CAPTURE_THRESHOLD_RAD) {
+            lqr.reset();
+            currentState = STATE_BALANCING;
+            Serial.println("[STATE] -> BALANCING (LQR active)");
+          }
+
+          // Give up if it's been too long (>2 s) without capture
+          if (elapsed > 2000) {
+            currentState = STATE_IDLE;
+            Serial.println("[STATE] -> IDLE (capture timed out, send GO again)");
+          }
+        }
+        break;
+      }
+
+      // ── BALANCING: LQR in full control ──
+      case STATE_BALANCING: {
+        float force = lqr.getAction(x, theta, 0.0);
+        motorSpeed  = forceToMotorSpeed(force);
+        setMotorSpeed(motorSpeed);
+
+        // Fall detection
+        if (fabs(theta) > FALL_THRESHOLD_RAD) {
+          setMotorSpeed(0);
+          currentState = STATE_IDLE;
+          Serial.println("[STATE] -> IDLE (pendulum fell, send GO to retry)");
+        }
+        break;
+      }
+
+      case STATE_FALLEN:
+      default:
+        setMotorSpeed(0);
+        currentState = STATE_IDLE;
+        break;
+    }
 
     lastControl = currentTime;
   }
 
-  // Print / plot at 20Hz (50ms) — faster rate gives smoother plotter trace
-  if (currentTime - lastPrint >= 50) {
+  // ── Debug print at 10Hz ──
+  if (currentTime - lastPrint >= 100) {
     float theta = getAngleRadians();
     float x     = getMotorPosition();
 
-    if (PLOTTER_MODE) {
-      // ── Serial Plotter format ──
-      // Each label:value pair separated by tabs; println ends the sample row.
-      // Open Tools → Serial Plotter to see live traces.
-      // Scale Control by /100 so it fits on the same axis as theta (rad).
-      Serial.print("Theta_rad:");        Serial.print(theta, 4);
-      Serial.print("\t");
-      Serial.print("Theta_deg/100:");    Serial.print(theta * (180.0 / PI) / 1.0, 4);
-      Serial.print("\t");
-      Serial.print("X_m:");             Serial.print(x, 4);
-      Serial.print("\t");
-      Serial.print("Target_x:");        Serial.print(target_x, 0);
-      Serial.print("\t");
-      Serial.print("Control/1000:");    Serial.println(motorSpeed / 1.0, 0);
-    } else {
-      // ── Human-readable Serial Monitor format ──
-      Serial.print("Theta: ");          Serial.print(theta, 4);
-      Serial.print(" rad | ");          Serial.print(theta * (180.0 / PI), 2);
-      Serial.print(" deg | X: ");       Serial.print(x, 4);
-      Serial.print(" m | Target: ");    Serial.print(target_x, 4);
-      Serial.print(" m | Theta_dot: "); Serial.print(lqr.getThetaDot(), 4);
-      Serial.print(" | X_dot: ");       Serial.print(lqr.getXDot(), 4);
-      Serial.print(" | Control: ");     Serial.println(motorSpeed);
-    }
+    const char* stateStr = "IDLE";
+    if      (currentState == STATE_JERK)      stateStr = "JERK";
+    else if (currentState == STATE_BALANCING) stateStr = "BALANCING";
 
+    Serial.print("[");       Serial.print(stateStr);
+    Serial.print("] Theta: ");       Serial.print(theta, 4);
+    Serial.print(" rad | ");         Serial.print(theta * (180.0 / PI), 2);
+    Serial.print(" deg | X: ");      Serial.print(x, 4);
+    Serial.print(" m | Th_dot: ");   Serial.print(lqr.getThetaDot(), 4);
+    Serial.print(" | X_dot: ");      Serial.print(lqr.getXDot(), 4);
+    Serial.print(" | Ctrl: ");       Serial.println(motorSpeed);
     lastPrint = currentTime;
   }
 
@@ -411,9 +478,9 @@ float getMotorPosition() {
 int forceToMotorSpeed(float force) {
   float num = force * PWM_to_motor;
   if (num > 0) {
-    num = num + 150;
+    num = num + 200;
   } else {
-    num = num - 150;
+    num = num - 200;
   }
   int speed = (int)constrain(num, MIN_SPEED, MAX_SPEED);
   return MOTORS_FORWARD * speed;
@@ -426,67 +493,74 @@ void setMotorSpeed(int speed) {
   mc2.setSpeed(3, speed);
 }
 
-// ============================================
-// SERIAL COMMAND HANDLER
-// ============================================
 void handleSerialCommands() {
   if (Serial.available() > 0) {
     String command = Serial.readStringUntil('\n');
     command.trim();
 
-    if (command == "RESET") {
-      lqr.reset();
-      if (!PLOTTER_MODE) Serial.println("LQR reset");
+    // ── GO: trigger swing-up from IDLE ──
+    if (command == "GO") {
+      if (currentState == STATE_IDLE) {
+        jerkPhase      = 0;
+        jerkPhaseStart = millis();
+        currentState   = STATE_JERK;
+        lqr.reset();
+        Serial.println("[STATE] -> JERK (swing-up initiated)");
+      } else {
+        Serial.println("[WARN] Already running. Send STOP first.");
+      }
 
+    // ── STOP: halt everything, return to IDLE ──
+    } else if (command == "STOP") {
+      setMotorSpeed(0);
+      currentState = STATE_IDLE;
+      Serial.println("[STATE] -> IDLE (stopped)");
+
+    // ── RESET: same as STOP but also resets LQR state ──
+    } else if (command == "RESET") {
+      setMotorSpeed(0);
+      currentState = STATE_IDLE;
+      lqr.reset();
+      Serial.println("[STATE] -> IDLE (reset)");
+
+    // ── GAINS: print current gains ──
+    } else if (command == "GAINS") {
+      Serial.print("LQR Gains: k_x=");       Serial.print(lqr.getKx(), 4);
+      Serial.print(" k_x_dot=");             Serial.print(lqr.getKxDot(), 4);
+      Serial.print(" k_theta=");             Serial.print(lqr.getKtheta(), 4);
+      Serial.print(" k_theta_dot=");         Serial.println(lqr.getKthetaDot(), 4);
+      Serial.print("Jerk: spd1="); Serial.print(JERK_SPEED_1);
+      Serial.print(" dur1=");       Serial.print(JERK_DURATION_1);
+      Serial.print("ms | spd2=");  Serial.print(JERK_SPEED_2);
+      Serial.print(" dur2=");       Serial.print(JERK_DURATION_2);
+      Serial.println("ms");
+      Serial.print("Capture threshold: "); Serial.print(CAPTURE_THRESHOLD_RAD * 180.0 / PI, 1);
+      Serial.println(" deg");
+
+    // ── SET: update LQR gains at runtime ──
     } else if (command.startsWith("SET ")) {
       float gains[4];
       int idx = 0, lastSpace = 3;
-      for (int i = 4; i < (int)command.length() && idx < 4; i++) {
-        if (command[i] == ' ' || i == (int)command.length() - 1) {
-          if (i == (int)command.length() - 1) i++;
+      for (int i = 4; i < command.length() && idx < 4; i++) {
+        if (command[i] == ' ' || i == command.length() - 1) {
+          if (i == command.length() - 1) i++;
           gains[idx++] = command.substring(lastSpace + 1, i).toFloat();
           lastSpace = i;
         }
       }
       if (idx == 4) {
         lqr.setGains(gains[0], gains[1], gains[2], gains[3]);
-        if (!PLOTTER_MODE) {
-          Serial.print("LQR Gains updated: k_x=");     Serial.print(gains[0]);
-          Serial.print(" k_x_dot=");                   Serial.print(gains[1]);
-          Serial.print(" k_theta=");                   Serial.print(gains[2]);
-          Serial.print(" k_theta_dot=");               Serial.println(gains[3]);
-        }
+        Serial.print("LQR Gains updated: k_x=");     Serial.print(gains[0]);
+        Serial.print(" k_x_dot=");                   Serial.print(gains[1]);
+        Serial.print(" k_theta=");                   Serial.print(gains[2]);
+        Serial.print(" k_theta_dot=");               Serial.println(gains[3]);
+      } else {
+        Serial.println("[ERR] Usage: SET k_x k_x_dot k_theta k_theta_dot");
       }
 
-    } else if (command.startsWith("SPRINT ")) {
-      target_x = command.substring(7).toFloat();
-      if (!PLOTTER_MODE) {
-        Serial.print("Sprint target set to: ");
-        Serial.print(target_x, 3);
-        Serial.println(" m");
-      }
-
-    } else if (command == "HOME") {
-      target_x = 0.0;
-      if (!PLOTTER_MODE) Serial.println("Target reset to 0.0 m");
-
-    } else if (command == "STOP") {
-      setMotorSpeed(0);
-      if (!PLOTTER_MODE) Serial.println("Motors stopped");
-
-    } else if (command == "GAINS") {
-      if (!PLOTTER_MODE) {
-        Serial.print("Current LQR Gains: k_x=");   Serial.print(lqr.getKx(), 4);
-        Serial.print(" k_x_dot=");                 Serial.print(lqr.getKxDot(), 4);
-        Serial.print(" k_theta=");                 Serial.print(lqr.getKtheta(), 4);
-        Serial.print(" k_theta_dot=");             Serial.println(lqr.getKthetaDot(), 4);
-      }
-
-    } else if (command == "PLOT_ON") {
-      PLOTTER_MODE = true;
-
-    } else if (command == "PLOT_OFF") {
-      PLOTTER_MODE = false;
+    } else {
+      Serial.print("[ERR] Unknown command: ");
+      Serial.println(command);
     }
   }
 }
@@ -494,18 +568,8 @@ void handleSerialCommands() {
 // ============================================
 // SERIAL COMMAND REFERENCE
 // ============================================
-// RESET             — Reset LQR internal state
-// STOP              — Cut motor output immediately
-// GAINS             — Print current gains (Monitor mode only)
-// SET kx kxd kt ktd — e.g. SET 0 0 1000 3000
-// SPRINT x          — Move to target position in metres, e.g. SPRINT 2.0
-// HOME              — Return target to 0.0 m
-// PLOT_ON           — Switch to Serial Plotter output format
-// PLOT_OFF          — Switch to human-readable Serial Monitor format
-//
-// PLOTTER CHANNELS (Tools → Serial Plotter):
-//   Theta_rad        — pendulum angle in radians        (~±0.3 when balancing)
-//   Theta_deg/100    — angle in degrees, scaled ÷100    (~±0.17 when balancing)
-//   X_m              — cart position in metres
-//   Target_x         — current sprint target in metres
-//   Control/1000     — motor speed command, scaled ÷1000
+// GO                          — start swing-up from rest
+// STOP                        — halt motors, return to IDLE
+// RESET                       — STOP + clear LQR derivatives
+// GAINS                       — print current gains and jerk config
+// SET 0 0 1000 3000           — update LQR gains live

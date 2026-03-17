@@ -37,12 +37,12 @@ void setup() {
 
 void loop() {
   // Control motors on first shield
-  mc1.setSpeed(2, 400);
-  mc1.setSpeed(3, 600);
+  mc1.setSpeed(2, 800);
+  mc1.setSpeed(3, 800);
   
 
   // Control motor on second shield
-  mc2.setSpeed(2, 200); 
+  mc2.setSpeed(2, 800); 
   mc2.setSpeed(3, 800);
 
   // delay(5000);
