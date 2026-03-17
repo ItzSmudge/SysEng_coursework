@@ -693,16 +693,21 @@ if __name__ == "__main__":
 
     # ============================================================
     # SCENARIO 5 — PID: sprint 2 metres while balancing
-    # ============================================================
-    # initial_state = ANGLE_0.copy()
-    # controller = PIDController(**PID_SPRINT, dt=0.001, filter_enabled=True, window_size=50)
-    # pend = Pendulum(M=M, m=m, l=l, b=b, dt=0.001, mode="1", disturbance_level=0)
-    # visualize_trajectory_interactive(pend, initial_state, controller, steps=10000, target_pos=[2.0, 0.0])
+    initial_state = ANGLE_0.copy()
+    controller = TrajectoryPIDController(
+        kp_theta=120.0, kd_theta=20.0, ki_theta=5.0,
+        kp_x=5.0,       kd_x=10.0,    ki_x=0.1,
+        dt=0.001,
+        trajectory_duration=5.0,   # spreads the 2m move over 5 seconds
+        filter_enabled=True, window_size=50
+    )
+    pend = Pendulum(M=M, m=m, l=l, b=b, dt=0.001, mode="1", disturbance_level=0)
+    visualize_trajectory_interactive(pend, initial_state, controller, steps=10000, target_pos=[2.0, 0.0])
 
     # ============================================================
     # SCENARIO 6 — LQR: sprint 2 metres while balancing
     # ============================================================
-    initial_state = ANGLE_0.copy()
-    controller = LQRController(M=M, m=m, l=l, b=b, Q=Q_lqr, R=R_lqr, filter_enabled=True, window_size=50)
-    pend = Pendulum(M=M, m=m, l=l, b=b, dt=0.001, mode="1", disturbance_level=0)
-    visualize_trajectory_interactive(pend, initial_state, controller, steps=10000, target_pos=[2.0, 0.0])
+    # initial_state = ANGLE_0.copy()
+    # controller = LQRController(M=M, m=m, l=l, b=b, Q=Q_lqr, R=R_lqr, filter_enabled=True, window_size=50)
+    # pend = Pendulum(M=M, m=m, l=l, b=b, dt=0.001, mode="1", disturbance_level=0)
+    # visualize_trajectory_interactive(pend, initial_state, controller, steps=10000, target_pos=[2.0, 0.0])
