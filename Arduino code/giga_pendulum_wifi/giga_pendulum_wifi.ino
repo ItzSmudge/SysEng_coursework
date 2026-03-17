@@ -5,14 +5,14 @@
 // ============================================
 
 #include <Motoron.h>
-#include <WiFiS3.h>
+#include <WiFi.h>
 #include <ArduinoJson.h>
 
 // ============================================
 // WIFI CONFIGURATION
 // ============================================
-const char* ssid = "YOUR_SSID";           // Change this
-const char* password = "YOUR_PASSWORD";   // Change this
+const char* ssid = "Conn";           // Change this
+const char* password = "12345678";   // Change this
 const int WIFI_PORT = 8080;
 
 WiFiServer server(WIFI_PORT);
