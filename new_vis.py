@@ -1,4 +1,4 @@
-import matplotlib.pyplot as plt
+cleimport matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from matplotlib.patches import Rectangle
 from matplotlib.widgets import Slider, Button
