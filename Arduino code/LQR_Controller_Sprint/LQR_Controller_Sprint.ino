@@ -42,6 +42,11 @@ volatile long motorCount = 0;
 volatile int  lastMotorA = LOW;
 volatile int  lastMotorB = LOW;
 
+// Sprint control state
+bool sprintActive      = false;
+float sprintTargetDist = 1.0;  // 1 metre target
+float sprintStartPos   = 0.0;
+
 // ============================================
 // TICKER CONFIGURATION
 // ============================================
@@ -172,6 +177,7 @@ private:
   float x_dot;
   unsigned long lastTime;
   float dt;
+  int made_distance = 0;
 
 public:
   LQRController(float k_x_gain = 1.0, float k_x_dot_gain = 1.0,
@@ -186,6 +192,7 @@ public:
     prev_x      = 0.0;
     theta_dot   = 0.0;
     x_dot       = 0.0;
+    made_distance = 0;
     filter_enabled = filter_en;
     if (filter_enabled) {
       filter_theta = new MovingAverageFilter(window_size);
@@ -203,6 +210,11 @@ public:
   }
 
   float getAction(float x, float theta, float target_x = 0.0) {
+    if (x > sprintTargetDist && !made_distance) {
+      made_distance = 1;
+      setGains(0, 0, 750, 2625);
+    }
+
     unsigned long currentTime = millis();
     float actual_dt = (currentTime - lastTime) / 1000.0;
     if (actual_dt <= 0.0) actual_dt = dt;
@@ -251,17 +263,19 @@ public:
 };
 
 // ============================================
-// GLOBAL OBJECTS
+// GLOBAL OBJECTS & STATE
 // ============================================
 LQRController lqr(
   1000.0,     // k_x
   1000.0,     // k_x_dot
-  750,  // k_theta    — scaled to match PID kp_theta
-  2625,  // k_theta_dot — scaled to match PID kd_theta
-  0.01,    // dt
-  5,       // window_size
-  true     // filter_enabled
+  750,        // k_theta    — scaled to match PID kp_theta
+  2625,       // k_theta_dot — scaled to match PID kd_theta
+  0.01,       // dt
+  5,          // window_size
+  true        // filter_enabled
 );
+
+
 
 // ============================================
 // SETUP
@@ -306,11 +320,12 @@ void setup() {
   Serial.println("  Board    : Arduino GIGA R1 (mbed)");
   Serial.println("  Encoder  : mbed::Ticker polling 10kHz");
   Serial.println("  Pendulum : AS22  (Pins 10, 11, 4)");
-  Serial.println("  Motor    : Pololu 25D (Pins 12, 13)");
+  Serial.println("  Motor    : Pololu 25D (Pins 2, 3)");
   Serial.println("  CPR      : 4096 counts/rev");
   Serial.println("========================================");
-  Serial.println("System ready. Starting control loop...");
+  Serial.println("System ready. Waiting for commands...");
   Serial.println();
+  printCommandMenu();
 
   lqr.reset();
 }
@@ -330,9 +345,29 @@ void loop() {
     float x        = getMotorPosition();
     float target_x = -1.0;
 
-    float force = lqr.getAction(x, theta, target_x);
-    motorSpeed  = forceToMotorSpeed(force);
-    setMotorSpeed(motorSpeed);
+    // If sprint is active, adjust target based on distance travelled
+    if (sprintActive) {
+      float distanceTravelled = x - sprintStartPos;
+       float force = lqr.getAction(x, theta, target_x);
+        motorSpeed = forceToMotorSpeed(force);
+        setMotorSpeed(motorSpeed);
+      
+      // Check if 1 metre sprint is complete
+      // if (distanceTravelled >= sprintTargetDist) {
+      //   // sprintActive = false;
+      //   // motorSpeed = 0;
+      //   // setMotorSpeed(0);
+      //   // Serial.println("\n>>> SPRINT COMPLETE! Robot stopped. <<<");
+      //   // Serial.print("Distance travelled: ");
+      //   // Serial.print(distanceTravelled, 4);
+      //   // Serial.println(" m");
+      // } else {
+      //   // Continue with LQR control during sprint
+      //   float force = lqr.getAction(x, theta, target_x);
+      //   motorSpeed = forceToMotorSpeed(force);
+      //   setMotorSpeed(motorSpeed);
+      // }
+    }
 
     lastControl = currentTime;
   }
@@ -346,6 +381,7 @@ void loop() {
     Serial.print(" deg | X: ");       Serial.print(x, 4);
     Serial.print(" m | Theta_dot: "); Serial.print(lqr.getThetaDot(), 4);
     Serial.print(" | X_dot: ");       Serial.print(lqr.getXDot(), 4);
+    Serial.print(" | Sprint: ");      Serial.print(sprintActive ? "ACTIVE" : "IDLE");
     Serial.print(" | Control: ");     Serial.println(motorSpeed);
     lastPrint = currentTime;
   }
@@ -374,8 +410,6 @@ int forceToMotorSpeed(float force) {
   float num = force * PWM_to_motor;
   if (num > 0){
     num = num + 175;
-
-  
   } else{
     num = num - 175; 
   }
@@ -391,14 +425,75 @@ void setMotorSpeed(int speed) {
   mc2.setSpeed(3, speed);
 }
 
+void printCommandMenu() {
+  Serial.println("========================================");
+  Serial.println("AVAILABLE COMMANDS:");
+  Serial.println("  START      - Begin 1 metre sprint");
+  Serial.println("  STOP       - Stop motors immediately");
+  Serial.println("  RESET      - Reset LQR controller");
+  Serial.println("  RESET_MOTOR - Reset motor encoder count");
+  Serial.println("  GAINS      - Display current LQR gains");
+  Serial.println("  SET gains  - Set gains (k_x k_x_dot k_theta k_theta_dot)");
+  Serial.println("               Example: SET 1000 1000 750 2625");
+  Serial.println("========================================");
+}
+
 void handleSerialCommands() {
   if (Serial.available() > 0) {
     String command = Serial.readStringUntil('\n');
     command.trim();
+    command.toUpperCase();
 
-    if (command == "RESET") {
+    if (command == "START") {
+      if (sprintActive) {
+        Serial.println(">>> Sprint already in progress!");
+      } else {
+        sprintActive = true;
+        sprintStartPos = getMotorPosition();
+        lqr.reset();
+        Serial.println("\n>>> SPRINT STARTED! <<<");
+        Serial.println("Robot will travel 1.0 metre while balancing pendulum.");
+        Serial.print("Start position: ");
+        Serial.print(sprintStartPos, 4);
+        Serial.println(" m");
+      }
+
+    } else if (command == "STOP") {
+      if (sprintActive) {
+        sprintActive = false;
+        float distanceTravelled = getMotorPosition() - sprintStartPos;
+        Serial.println("\n>>> SPRINT STOPPED MANUALLY <<<");
+        Serial.print("Distance travelled: ");
+        Serial.print(distanceTravelled, 4);
+        Serial.println(" m");
+      }
+      setMotorSpeed(0);
+      Serial.println("Motors stopped.");
+
+    } else if (command == "RESET") {
       lqr.reset();
-      Serial.println("LQR reset");
+      sprintActive = false;
+      setMotorSpeed(0);
+      Serial.println(">>> LQR controller reset <<<");
+      Serial.println("Motors stopped.");
+
+    } else if (command == "RESET_MOTOR") {
+      core_util_critical_section_enter();
+      motorCount = 0;
+      core_util_critical_section_exit();
+      sprintActive = false;
+      setMotorSpeed(0);
+      Serial.println(">>> MOTOR ENCODER RESET <<<");
+      Serial.println("Motor count set to 0. Motors stopped.");
+
+    } else if (command == "GAINS") {
+      Serial.println("\n========================================");
+      Serial.println("CURRENT LQR GAINS:");
+      Serial.print("  k_x        = ");       Serial.println(lqr.getKx(), 4);
+      Serial.print("  k_x_dot    = ");       Serial.println(lqr.getKxDot(), 4);
+      Serial.print("  k_theta    = ");       Serial.println(lqr.getKtheta(), 4);
+      Serial.print("  k_theta_dot= ");       Serial.println(lqr.getKthetaDot(), 4);
+      Serial.println("========================================");
 
     } else if (command.startsWith("SET ")) {
       float gains[4];
@@ -412,21 +507,20 @@ void handleSerialCommands() {
       }
       if (idx == 4) {
         lqr.setGains(gains[0], gains[1], gains[2], gains[3]);
-        Serial.print("LQR Gains updated: k_x=");     Serial.print(gains[0]);
-        Serial.print(" k_x_dot=");                   Serial.print(gains[1]);
-        Serial.print(" k_theta=");                   Serial.print(gains[2]);
-        Serial.print(" k_theta_dot=");               Serial.println(gains[3]);
+        Serial.println("\n>>> LQR GAINS UPDATED <<<");
+        Serial.print("  k_x        = ");       Serial.println(gains[0]);
+        Serial.print("  k_x_dot    = ");       Serial.println(gains[1]);
+        Serial.print("  k_theta    = ");       Serial.println(gains[2]);
+        Serial.print("  k_theta_dot= ");       Serial.println(gains[3]);
+      } else {
+        Serial.println("Error: SET command requires 4 gains. Usage: SET k_x k_x_dot k_theta k_theta_dot");
       }
 
-    } else if (command == "STOP") {
-      setMotorSpeed(0);
-      Serial.println("Motors stopped");
+    } else if (command == "HELP") {
+      printCommandMenu();
 
-    } else if (command == "GAINS") {
-      Serial.print("Current LQR Gains: k_x=");       Serial.print(lqr.getKx(), 4);
-      Serial.print(" k_x_dot=");                     Serial.print(lqr.getKxDot(), 4);
-      Serial.print(" k_theta=");                     Serial.print(lqr.getKtheta(), 4);
-      Serial.print(" k_theta_dot=");                 Serial.println(lqr.getKthetaDot(), 4);
+    } else if (command != "") {
+      Serial.println("Unknown command. Type HELP for available commands.");
     }
   }
 }
@@ -434,7 +528,10 @@ void handleSerialCommands() {
 // ============================================
 // SERIAL COMMAND EXAMPLES
 // ============================================
-// RESET
-// STOP
-// GAINS
-// SET 0 0 1000 3000
+// START              - Begin 1 metre sprint with pendulum balancing
+// STOP               - Stop motors immediately
+// RESET              - Reset LQR controller and stop motors
+// RESET_MOTOR        - Reset motor encoder to zero
+// GAINS              - Display current gains
+// SET 1000 1000 750 2625  - Update LQR gains
+// HELP               - Show command menu
