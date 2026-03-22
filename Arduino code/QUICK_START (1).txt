@@ -1,0 +1,87 @@
+# Quick Start Guide (5 Minutes)
+
+## Step 1: Arduino Setup (2 minutes)
+
+1. **Install Libraries** in Arduino IDE:
+   - Motoron Motor Controller Library
+   - ArduinoJson
+
+2. **Edit WiFi Credentials** in `giga_pendulum_wifi.ino`:
+   ```cpp
+   const char* ssid = "YOUR_SSID";           // ← Change this
+   const char* password = "YOUR_PASSWORD";   // ← Change this
+   ```
+
+3. **Upload** to Arduino Giga R1 WiFi
+
+4. **Find Giga's IP** from Serial Monitor (115200 baud):
+   ```
+   WiFi connected!
+   IP Address: 192.168.1.XXX  ← Note this!
+   ```
+
+## Step 2: Run Python Script (1 minute)
+
+```bash
+python3 pendulum_control.py
+```
+
+## Step 3: Connect & Control (2 minutes)
+
+```bash
+giga> connect 192.168.1.XXX    # Use the IP from Step 1
+
+giga> status                    # Check if it's working
+
+giga> preset balanced           # Load balanced PID gains
+
+giga> start                     # Start the pendulum!
+
+giga> monitor                   # Watch live data (Ctrl+C to stop)
+
+giga> stop                      # Stop when done
+
+giga> exit                      # Exit program
+```
+
+## That's It! 🎉
+
+You now have:
+- ✅ WiFi control of your inverted pendulum
+- ✅ Live status monitoring
+- ✅ Real-time PID gain adjustment
+- ✅ Encoder reset via WiFi
+- ✅ 3x faster Arduino Giga hardware
+
+## Common Commands Cheat Sheet
+
+| Command | What it does |
+|---------|-------------|
+| `connect IP` | Connect to Giga |
+| `start` | Start the controller |
+| `stop` | Stop the controller |
+| `reset_encoder` | Reset encoder to 0 |
+| `status` | Show current state |
+| `monitor` | Live data stream |
+| `set_gains K1 K2 K3 K4 K5 K6` | Adjust PID gains |
+| `preset balanced` | Load default settings |
+| `quick_tune` | Interactive tuning wizard |
+
+## Troubleshooting
+
+**Can't connect?**
+- Check IP address matches (use Serial Monitor)
+- Ensure both devices on same WiFi network
+- Wait 10 seconds after upload before connecting
+
+**Motors not moving?**
+- Check Motoron I2C wiring (pins 20, 21)
+- Verify motor power supply
+- Try `stop` then `start` to reset
+
+**WiFi keeps disconnecting?**
+- Move Giga closer to router (2.4GHz)
+- Check WiFi credentials in sketch
+- Re-upload sketch
+
+See full **README.md** for detailed setup and troubleshooting!

@@ -25,7 +25,7 @@ import matplotlib.animation as animation
 from matplotlib.patches import Rectangle, Circle
 import numpy as np
 from pendulum import Pendulum
-from controllers import PIDController
+from controllers import PIDController, LQRController
 
 
 def visualize_trajectory(pendulum, trajectory, save_gif=False):
@@ -231,7 +231,7 @@ def plot_results(pendulum, trajectory):
 # Example usage:
 if __name__ == "__main__":
     # Create pendulum
-    pend = Pendulum(M=0.5, m=0.2, l=0.8, b=0.1, dt=0.001, mode="1", disturbance_level=2)
+    pend = Pendulum(M=0.5, m=0.2, l=0.8, b=0.1, dt=0.001, mode="1", disturbance_level=0)
     
     # Create a simple controller (example: constant force or proportional control)
     class SimpleController:
@@ -240,8 +240,10 @@ if __name__ == "__main__":
             Kp = 10
             return 0
     
-    controller = PIDController(kp_theta=75.0, kd_theta=2, ki_theta=0,
-                               kp_x=0, kd_x=0, ki_x=0)
+    controller = PIDController(kp_theta=75.0, kd_theta=2, ki_theta=0,kp_x=0, kd_x=0, ki_x=0)
+    
+    #controller = controller = LQRController(M=0.5, m=0.2, l=0.8, b=0.1, Q=np.diag([10.0, 1.0, 100.0, 1.0]), R=0.1)
+
     # controller = SimpleController()
     
     # Initial state: [x, x_dot, theta, theta_dot]
