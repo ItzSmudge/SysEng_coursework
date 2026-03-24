@@ -50,37 +50,6 @@ const int SAMPLE_INTERVAL_US = 100; // 10kHz
 mbed::Ticker encoderTicker;
 
 // ============================================
-// SWING-UP / STATE MACHINE CONFIGURATION
-// ============================================
-enum SystemState {
-  STATE_IDLE,       // Waiting for GO command
-  STATE_JERK,       // Applying initial impulse
-  STATE_BALANCING,  // LQR active
-  STATE_FALLEN      // Pendulum has fallen, back to idle
-};
-
-SystemState currentState = STATE_IDLE;
-
-// --- Jerk parameters (tune these on the bench) ---
-// Positive JERK_SPEED pushes cart one way; flip sign if pendulum goes wrong way.
-const int   JERK_SPEED_1    =  750;   // First kick speed (counts, raw motor units)
-const int   JERK_DURATION_1 =  200;   // Duration of first kick (ms)
-const int   JERK_SPEED_2    = 0;   // Brief reverse to decelerate cart
-const int   JERK_DURATION_2 = 40;   // Duration of reverse (ms)
-
-// --- LQR capture window ---
-// LQR only takes over when pendulum is within this angle of upright (rad).
-// Tighten once swing-up is reliable.
-const float CAPTURE_THRESHOLD_RAD = 0.35f;  // ~20 deg
-
-// --- Fall detection: if LQR is active and angle exceeds this, give up ---
-const float FALL_THRESHOLD_RAD    = 0.60f;  // ~34 deg
-
-// Jerk phase timing
-unsigned long jerkPhaseStart = 0;
-int           jerkPhase      = 0; // 0 = first kick, 1 = reverse, 2 = coast-to-capture
-
-// ============================================
 // TICKER CALLBACK: QUADRATURE SAMPLING
 // ============================================
 void sampleEncoders() {
@@ -287,8 +256,8 @@ public:
 LQRController lqr(
   0.0,     // k_x
   0.0,     // k_x_dot
-  800.0,  // k_theta
-  2500.0,  // k_theta_dot
+  700.0,  // k_theta    — scaled to match PID kp_theta
+  2250.0,  // k_theta_dot — scaled to match PID kd_theta
   0.01,    // dt
   5,       // window_size
   true     // filter_enabled
@@ -333,15 +302,14 @@ void setup() {
   Serial.println("Driver 2 (Addr 17) Initialized.");
 
   Serial.println("========================================");
-  Serial.println("LQR CONTROLLER WITH SWING-UP");
+  Serial.println("LQR CONTROLLER WITH DUAL ENCODERS");
   Serial.println("  Board    : Arduino GIGA R1 (mbed)");
   Serial.println("  Encoder  : mbed::Ticker polling 10kHz");
   Serial.println("  Pendulum : AS22  (Pins 10, 11, 4)");
   Serial.println("  Motor    : Pololu 25D (Pins 12, 13)");
   Serial.println("  CPR      : 4096 counts/rev");
   Serial.println("========================================");
-  Serial.println("Commands: GO | STOP | RESET | GAINS | SET k_x k_xd k_th k_thd");
-  Serial.println("State: IDLE — send GO to begin swing-up");
+  Serial.println("System ready. Starting control loop...");
   Serial.println();
 
   lqr.reset();
@@ -356,103 +324,29 @@ void loop() {
   static int motorSpeed            = 0;
   unsigned long currentTime        = millis();
 
-  // ── Control loop at 100Hz ──
+  // Control loop at 100Hz (10ms)
   if (currentTime - lastControl >= 10) {
-    float theta = getAngleRadians();
-    float x     = getMotorPosition();
+    float theta    = getAngleRadians();
+    float x        = getMotorPosition();
+    float target_x = 0.0;
 
-    switch (currentState) {
-
-      // ── IDLE: motors off, waiting for GO ──
-      case STATE_IDLE:
-        motorSpeed = 0;
-        setMotorSpeed(0);
-        break;
-
-      // ── JERK: two-phase open-loop impulse ──
-      case STATE_JERK: {
-        unsigned long elapsed = currentTime - jerkPhaseStart;
-
-        if (jerkPhase == 0) {
-          // Phase 0: initial kick
-          motorSpeed = MOTORS_FORWARD * JERK_SPEED_1;
-          setMotorSpeed(motorSpeed);
-          if (elapsed >= JERK_DURATION_1) {
-            jerkPhase      = 1;
-            jerkPhaseStart = currentTime;
-          }
-
-        } else if (jerkPhase == 1) {
-          // Phase 1: short reverse to shed cart momentum
-          motorSpeed = MOTORS_FORWARD * JERK_SPEED_2;
-          setMotorSpeed(motorSpeed);
-          if (elapsed >= JERK_DURATION_2) {
-            jerkPhase      = 2;
-            jerkPhaseStart = currentTime;
-          }
-
-        } else {
-          // Phase 2: coast and watch for LQR capture
-          motorSpeed = 0;
-          setMotorSpeed(0);
-
-          // Hand off to LQR once pendulum is near upright
-          if (fabs(theta) < CAPTURE_THRESHOLD_RAD) {
-            lqr.reset();
-            currentState = STATE_BALANCING;
-            Serial.println("[STATE] -> BALANCING (LQR active)");
-          }
-
-          // Give up if it's been too long (>2 s) without capture
-          if (elapsed > 2000) {
-            currentState = STATE_IDLE;
-            Serial.println("[STATE] -> IDLE (capture timed out, send GO again)");
-          }
-        }
-        break;
-      }
-
-      // ── BALANCING: LQR in full control ──
-      case STATE_BALANCING: {
-        float force = lqr.getAction(x, theta, 0.0);
-        motorSpeed  = forceToMotorSpeed(force);
-        setMotorSpeed(motorSpeed);
-
-        // Fall detection
-        if (fabs(theta) > FALL_THRESHOLD_RAD) {
-          setMotorSpeed(0);
-          currentState = STATE_IDLE;
-          Serial.println("[STATE] -> IDLE (pendulum fell, send GO to retry)");
-        }
-        break;
-      }
-
-      case STATE_FALLEN:
-      default:
-        setMotorSpeed(0);
-        currentState = STATE_IDLE;
-        break;
-    }
+    float force = lqr.getAction(x, theta, target_x);
+    motorSpeed  = forceToMotorSpeed(force);
+    setMotorSpeed(motorSpeed);
 
     lastControl = currentTime;
   }
 
-  // ── Debug print at 10Hz ──
+  // Print debug info at 10Hz (100ms)
   if (currentTime - lastPrint >= 100) {
     float theta = getAngleRadians();
     float x     = getMotorPosition();
-
-    const char* stateStr = "IDLE";
-    if      (currentState == STATE_JERK)      stateStr = "JERK";
-    else if (currentState == STATE_BALANCING) stateStr = "BALANCING";
-
-    Serial.print("[");       Serial.print(stateStr);
-    Serial.print("] Theta: ");       Serial.print(theta, 4);
-    Serial.print(" rad | ");         Serial.print(theta * (180.0 / PI), 2);
-    Serial.print(" deg | X: ");      Serial.print(x, 4);
-    Serial.print(" m | Th_dot: ");   Serial.print(lqr.getThetaDot(), 4);
-    Serial.print(" | X_dot: ");      Serial.print(lqr.getXDot(), 4);
-    Serial.print(" | Ctrl: ");       Serial.println(motorSpeed);
+    Serial.print("Theta: ");          Serial.print(theta, 4);
+    Serial.print(" rad | ");          Serial.print(theta * (180.0 / PI), 2);
+    Serial.print(" deg | X: ");       Serial.print(x, 4);
+    Serial.print(" m | Theta_dot: "); Serial.print(lqr.getThetaDot(), 4);
+    Serial.print(" | X_dot: ");       Serial.print(lqr.getXDot(), 4);
+    Serial.print(" | Control: ");     Serial.println(motorSpeed);
     lastPrint = currentTime;
   }
 
@@ -476,12 +370,16 @@ float getMotorPosition() {
 }
 
 int forceToMotorSpeed(float force) {
+  // Matches PID scaling exactly
   float num = force * PWM_to_motor;
-  if (num > 0) {
+  if (num > 0){
     num = num + 200;
-  } else {
-    num = num - 200;
+
+  
+  } else{
+    num = num - 200; 
   }
+
   int speed = (int)constrain(num, MIN_SPEED, MAX_SPEED);
   return MOTORS_FORWARD * speed;
 }
@@ -498,46 +396,10 @@ void handleSerialCommands() {
     String command = Serial.readStringUntil('\n');
     command.trim();
 
-    // ── GO: trigger swing-up from IDLE ──
-    if (command == "GO") {
-      if (currentState == STATE_IDLE) {
-        jerkPhase      = 0;
-        jerkPhaseStart = millis();
-        currentState   = STATE_JERK;
-        lqr.reset();
-        Serial.println("[STATE] -> JERK (swing-up initiated)");
-      } else {
-        Serial.println("[WARN] Already running. Send STOP first.");
-      }
-
-    // ── STOP: halt everything, return to IDLE ──
-    } else if (command == "STOP") {
-      setMotorSpeed(0);
-      currentState = STATE_IDLE;
-      Serial.println("[STATE] -> IDLE (stopped)");
-
-    // ── RESET: same as STOP but also resets LQR state ──
-    } else if (command == "RESET") {
-      setMotorSpeed(0);
-      currentState = STATE_IDLE;
+    if (command == "RESET") {
       lqr.reset();
-      Serial.println("[STATE] -> IDLE (reset)");
+      Serial.println("LQR reset");
 
-    // ── GAINS: print current gains ──
-    } else if (command == "GAINS") {
-      Serial.print("LQR Gains: k_x=");       Serial.print(lqr.getKx(), 4);
-      Serial.print(" k_x_dot=");             Serial.print(lqr.getKxDot(), 4);
-      Serial.print(" k_theta=");             Serial.print(lqr.getKtheta(), 4);
-      Serial.print(" k_theta_dot=");         Serial.println(lqr.getKthetaDot(), 4);
-      Serial.print("Jerk: spd1="); Serial.print(JERK_SPEED_1);
-      Serial.print(" dur1=");       Serial.print(JERK_DURATION_1);
-      Serial.print("ms | spd2=");  Serial.print(JERK_SPEED_2);
-      Serial.print(" dur2=");       Serial.print(JERK_DURATION_2);
-      Serial.println("ms");
-      Serial.print("Capture threshold: "); Serial.print(CAPTURE_THRESHOLD_RAD * 180.0 / PI, 1);
-      Serial.println(" deg");
-
-    // ── SET: update LQR gains at runtime ──
     } else if (command.startsWith("SET ")) {
       float gains[4];
       int idx = 0, lastSpace = 3;
@@ -554,22 +416,25 @@ void handleSerialCommands() {
         Serial.print(" k_x_dot=");                   Serial.print(gains[1]);
         Serial.print(" k_theta=");                   Serial.print(gains[2]);
         Serial.print(" k_theta_dot=");               Serial.println(gains[3]);
-      } else {
-        Serial.println("[ERR] Usage: SET k_x k_x_dot k_theta k_theta_dot");
       }
 
-    } else {
-      Serial.print("[ERR] Unknown command: ");
-      Serial.println(command);
+    } else if (command == "STOP") {
+      setMotorSpeed(0);
+      Serial.println("Motors stopped");
+
+    } else if (command == "GAINS") {
+      Serial.print("Current LQR Gains: k_x=");       Serial.print(lqr.getKx(), 4);
+      Serial.print(" k_x_dot=");                     Serial.print(lqr.getKxDot(), 4);
+      Serial.print(" k_theta=");                     Serial.print(lqr.getKtheta(), 4);
+      Serial.print(" k_theta_dot=");                 Serial.println(lqr.getKthetaDot(), 4);
     }
   }
 }
 
 // ============================================
-// SERIAL COMMAND REFERENCE
+// SERIAL COMMAND EXAMPLES
 // ============================================
-// GO                          — start swing-up from rest
-// STOP                        — halt motors, return to IDLE
-// RESET                       — STOP + clear LQR derivatives
-// GAINS                       — print current gains and jerk config
-// SET 0 0 1000 3000           — update LQR gains live
+// RESET
+// STOP
+// GAINS
+// SET 0 0 1000 3000
