@@ -573,3 +573,4 @@ void handleSerialCommands() {
 // RESET                       — STOP + clear LQR derivatives
 // GAINS                       — print current gains and jerk config
 // SET 0 0 1000 3000           — update LQR gains live
+// Jerk 0 0 0 0 - output and time for each jerk motion 
