@@ -48,13 +48,19 @@ The physical system was built on an Arduino Giga R1 with four Pololu 25D motors,
 │   ├── controllers.py    # PIDController, LQRController, TrajectoryPIDController
 │   ├── filters.py        # MovingAverageFilter
 │   └── demo.py           # Interactive two-window visualisation with CLI flags
+|   └── benchmark_54.py   # Obtains simulation benchmarking metrics for simulations
+|   └── generate_plots.py # Visualisations for simulation metrics
 │
 ├── sysml/
 │   └── COMP0216_TEAM3_MBSE.mdzip   # Cameo Magic project file (all 6 SysML diagrams)
 │
-├── arduino/
-│   └── pendulum_lqr/
-│       └── pendulum_lqr.ino   # Embedded LQR + jerk swing-up + serial interface
+├── Arduino Code/
+│   └── inverted_pendulum_pid_serial/
+│       └── inverted_pendulum_pid_serial.ino
+|   └── lqr_swingup/
+│       └── lqr_swingup.ino
+|   └── inverted_pendulum_pid_serial/
+│       └── inverted_pendulum_pid_serial.ino 
 │
 ├── requirements.txt
 └── README.md
