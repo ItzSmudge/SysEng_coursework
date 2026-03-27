@@ -5,7 +5,7 @@ Aayan Islam · Xavier Parker · Peter Neville · Helitha Cooray
 
 ---
 
-A Python simulation and control environment for a self-balancing inverted pendulum cart, built as part of the UCL COMP0216 Systems Engineering module. Includes a full physics simulation with RK4 integration, PID and LQR controllers, an interactive real-time demo, and the SysML model produced in Cameo Magic.
+A Python simulation and control environment for a self-balancing inverted pendulum cart, built as part of the UCL COMP0216 Systems Engineering module. Includes a full physics simulation with RK4 integration, PID and LQR controllers, an interactive real-time demo, and the SysML model produced in CATIA Magic.
 
 The physical system was built on an Arduino Giga R1 with four Pololu 25D motors, a Broadcom AS22 optical encoder, and two Motoron I²C motor drivers. The embedded code is also included.
 
@@ -52,7 +52,7 @@ The physical system was built on an Arduino Giga R1 with four Pololu 25D motors,
 |   └── generate_plots.py # Visualisations for simulation metrics
 │
 ├── sysml/
-│   └── COMP0216_TEAM3_MBSE.mdzip   # Cameo Magic project file (all 6 SysML diagrams)
+│   └── COMP0216_TEAM3_MBSE.mdzip   # CATIA Magic project file (all 6 SysML diagrams)
 │
 ├── Arduino Code/
 │   └── inverted_pendulum_pid_serial/
