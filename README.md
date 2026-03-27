@@ -50,7 +50,7 @@ The physical system was built on an Arduino Giga R1 with four Pololu 25D motors,
 │   └── demo.py           # Interactive two-window visualisation with CLI flags
 │
 ├── sysml/
-│   └── team3_pendulum.mdzip   # Cameo Magic project file (all 6 SysML diagrams)
+│   └── COMP0216_TEAM3_MBSE.mdzip   # Cameo Magic project file (all 6 SysML diagrams)
 │
 ├── arduino/
 │   └── pendulum_lqr/
