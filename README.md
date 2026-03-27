@@ -150,6 +150,11 @@ python simulation/demo.py --eval C --controller lqr
 | `<> Reset` | Return to initial conditions |
 | `* Apply` | Apply slider changes (pauses first) |
 
+<img width="1919" height="941" alt="image" src="https://github.com/user-attachments/assets/556904a8-a09f-4e63-8030-cea8e7b20351" />
+
+<img width="1919" height="937" alt="image" src="https://github.com/user-attachments/assets/8aa5d7a3-d27c-4cdc-b4c9-21778de3650f" />
+
+
 **Disturbance buttons** (bottom of Window 1):
 
 - `[TAP] Pendulum` — angular impulse on the pendulum (`theta_dot`). Direction is randomised. Magnitude controlled by the slider next to it.
