@@ -59,8 +59,8 @@ The physical system was built on an Arduino Giga R1 with four Pololu 25D motors,
 │       └── inverted_pendulum_pid_serial.ino
 |   └── lqr_swingup/
 │       └── lqr_swingup.ino
-|   └── inverted_pendulum_pid_serial/
-│       └── inverted_pendulum_pid_serial.ino 
+|   └── LQR_inverted_pendulum/
+│       └── LQR_inverted_pendulum.ino 
 │
 ├── requirements.txt
 └── README.md
