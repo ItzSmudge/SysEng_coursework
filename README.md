@@ -110,8 +110,6 @@ export MPLBACKEND=Qt5Agg   # or TkAgg, Qt6Agg, wxAgg depending on what's install
 | `--controller` | `lqr` `pid` | `lqr` | Controller type |
 | `--angle` | `6.5` `10` `15` | `6.5` | V-block start angle in degrees (Eval B only) |
 | `--jerk` | — | off | Eval B: run open-loop jerk swing-up before handing to the controller |
-| `--noise` | float | `0.01` | Sensor noise standard deviation in rad |
-| `--steps` | int | `10000` | Ring-buffer length |
 
 ### Examples
 
