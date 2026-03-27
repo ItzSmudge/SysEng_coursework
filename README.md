@@ -161,7 +161,7 @@ For LQR these adjust the Q matrix diagonal entries and R. For PID they adjust Kp
 
 ## SysML diagrams
 
-All diagrams are in `sysml/team3_pendulum.mdzip`. Open this file in [Cameo Magic (No Magic)](https://www.nomagic.com/products/cameo-systems-modeler) to view and edit them.
+All diagrams are in `sysml/team3_pendulum.mdzip`. Open this file in CATIA Magic to view and edit them.
 
 The project contains six diagrams:
 
@@ -174,7 +174,7 @@ The project contains six diagrams:
 | State Machine Diagram | IDLE / JERK / BALANCING / FALLEN states with guard conditions and outputs |
 | Requirements Diagram | REQ-01/02/03 and CON-01/02/03/04 with deriveReqt and satisfy relationships |
 
-If you do not have Cameo installed, PNG exports of all six diagrams are in the project report (Section 4.4).
+If you do not have CATIA installed, PNG exports of all six diagrams are in the project report.
 
 ---
 
