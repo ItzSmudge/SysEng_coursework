@@ -161,7 +161,7 @@ For LQR these adjust the Q matrix diagonal entries and R. For PID they adjust Kp
 
 ## SysML diagrams
 
-All diagrams are in `sysml/team3_pendulum.mdzip`. Open this file in CATIA Magic to view and edit them.
+All diagrams are in `sysml/COMP0216_TEAM3_MBSE.mdzip`. Open this file in CATIA Magic to view and edit them.
 
 The project contains six diagrams:
 
