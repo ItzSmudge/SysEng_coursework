@@ -172,7 +172,7 @@ The project contains six diagrams:
 | Use Case Diagram | Seven use cases across Operator, Sensor, Actuator, and Evaluator actors |
 | Activity Diagram | Eval B swing-up control flow: GO → JERK → coast → monitor → LQR capture |
 | State Machine Diagram | IDLE / JERK / BALANCING / FALLEN states with guard conditions and outputs |
-| Requirements Diagram | REQ-01/02/03 and CON-01/02/03/04 with deriveReqt and satisfy relationships |
+| Requirements Diagram | REQ-01/02/03 and Constraints with deriveReqt and satisfy relationships |
 
 If you do not have CATIA installed, PNG exports of all six diagrams are in the project report.
 
